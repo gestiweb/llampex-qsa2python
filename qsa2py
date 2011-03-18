@@ -1,25 +1,56 @@
 #!/usr/bin/env python
-
+import logging
 import qsa2python as q2p
 from optparse import OptionParser
 
 def main():
-
-    parser = OptionParser()
+    usage = "usage: %prog [options] file1.qs file2.qs ..."
+    parser = OptionParser(usage)
     parser.set_defaults(
-        quiet=False,
-        verbose=False,
+        quiet=0,
+        verbose=0,
         )
         
     parser.add_option("-v", help="Be more verbose"
-                        ,dest="verbose", action="store_true")
+                        ,dest="verbose", action="count")
                         
     parser.add_option("-q", help="Quiet. Produce less output."
-                        ,dest="quiet", action="store_true")
+                        ,dest="quiet", action="count")
 
     (options, args) = parser.parse_args()
 
+    verbosity = options.verbose - options.quiet
+    verbosity_translate = {
+        -3 : 100, # silence.
+        -2 : logging.CRITICAL,
+        -1 : logging.ERROR,
+        0 : logging.WARNING,
+        1 : logging.INFO,
+        2 : logging.DEBUG,
+        3 : logging.NOTSET,
+    }
+    if verbosity > max(verbosity_translate.keys()):
+        verbosity = max(verbosity_translate.keys())
+        
+    if verbosity < min(verbosity_translate.keys()): 
+        verbosity = min(verbosity_translate.keys())
 
+    logger = logging.getLogger("qsa2python")
+    logger.setLevel(-10)
+    ch = logging.StreamHandler()
+    ch.setLevel(verbosity_translate[verbosity])
+    formatter = logging.Formatter("%(levelname)s: %(message)s")
+    ch.setFormatter(formatter)
+    logger.addHandler(ch)
+    
+    logger.debug("Starting program . . . ")
+    for filename in args:
+        logger.info("Parsing %s file . . . " % (repr(filename)))
+        parser = q2p.QSParser(filename)
+        #parser.load()
+        
+    
+    
 
     
 if __name__ == "__main__":

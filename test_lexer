@@ -1,0 +1,2 @@
+#!/bin/bash
+for file in tests/abanq/*.qs; do echo $file; cat $file |  python qsa2python/qsalexer.py > /dev/null; done
