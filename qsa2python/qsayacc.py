@@ -10,15 +10,22 @@ start = 'expression'
 debug = 0
 
 def p_number(p):
-    '''number : ICONST
-              | FCONST
+    '''const : ICONST
+             | FCONST
+             | SCONST
+             | CCONST
+             | RXCONST
     '''
     if p.slice[1].type == "ICONST":
         p[1] = int(p[1])
     if p.slice[1].type == "FCONST":
         p[1] = float(p[1])
+    if p.slice[1].type == "SCONST":
+        p[1] = str(p[1][1:-1])
+    if p.slice[1].type == "CCONST":
+        p[1] = str(p[1][1:-1])
     if debug > 4:
-        p[0] = { 'type' : 'number.%s' % p.slice[1].type, 'value' : p[1] }
+        p[0] = { 'type' : 'const.%s' % p.slice[1].type, 'value' : p[1] }
     else:
         p[0] = p[1]
 
@@ -51,10 +58,10 @@ def p_expression_paren(p):
         
 def p_expression_number(p):
     '''
-    expression : number
+    expression : const
     '''
     if debug > 5:
-        p[0] = { 'type': 'expression.number', 'value' : p[1] }
+        p[0] = { 'type': 'expression.%s' %  p.slice[1].type, 'value' : p[1] }
     else:
         p[0] = p[1]
     
@@ -63,14 +70,14 @@ def calculate(expr):
     if type(expr) is not dict: return expr
     etype = expr['type'].split(".")
     if etype[0] == "expression": return calculate_expression(expr,etype)
-    if etype[0] == "number": return calculate(expr['value'])
-    raise ValueError, "Unknown type:" % ".".join(etype)
+    if etype[0] == "const": return calculate(expr['value'])
+    raise ValueError, "Unknown type: %s" % ".".join(etype)
     
 def calculate_expression(expr,etype):
     if etype[1] == "math": return calculate_expression_math(expr,etype)
     if etype[1] == "paren": return calculate(expr['value'])
-    if etype[1] == "number": return calculate(expr['value'])
-    raise ValueError, "Unknown type:" % ".".join(etype)
+    if etype[1] == "const": return calculate(expr['value'])
+    raise ValueError, "Unknown type: %s" % ".".join(etype)
 
 def calculate_expression_math(expr,etype):
     vlist = [ calculate(e) for e in expr['values'] ]
@@ -83,7 +90,7 @@ def calculate_expression_math(expr,etype):
     if etype[2] == "DIVIDE": function = lambda x,y: x/float(y)
         
     if function is None:
-        raise ValueError, "Unknown type:" % ".".join(etype)
+        raise ValueError, "Unknown type: %s" % ".".join(etype)
     return reduce(function, endlist, startval)
     
     
@@ -98,7 +105,9 @@ def p_error(p):
 # Build the parser
 parser = yacc.yacc()
 import yaml
-s = "2+3+3/2.5/3.2+3+3*(5+6+8+9*2)"
+#s = "2+3+3/2.5/3.2+3+3*(5+6+8+9*2)"
+s = """ "Hola" + " ." * 5 + "mundo"
+"""
 result = parser.parse(s)
 print "Result:", calculate(result)
 print "Eval:", eval(s)
