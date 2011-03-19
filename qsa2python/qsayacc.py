@@ -1,13 +1,13 @@
+# encoding: UTF-8
 import ply.yacc as yacc
 from qsalexer import tokens
 precedence = (
     ('left', 'PLUS', 'MINUS'),
     ('left', 'TIMES', 'DIVIDE'),
 )
-start = 'expression'
-debug = 0
 
-def p_number(p):
+# Constante: Valor inmediato. Entero, Float, String, Carácter, Expresión regular.
+def p_const(p): 
     '''const : ICONST
              | FCONST
              | SCONST
@@ -27,7 +27,7 @@ def p_number(p):
     else:
         p[0] = p[1]
 
-
+# Expresión: combinación de elementos que devuelven un valor computado.
 def p_expression(p):
     '''
     expression : expression PLUS expression
@@ -42,97 +42,153 @@ def p_expression(p):
             del p[0]['valuelist'][0]
             p[0]['valuelist'] = p[1]['valuelist'] + p[0]['valuelist'] 
             
-                
     
 
 def p_expression_paren(p):
     '''
     expression : LPAREN expression RPAREN
     '''
-    if debug > 1:
-        p[0] = { 'type': 'expression.paren', 'value' : p[2] }
-    else:
-        p[0] = p[2]
+    p[0] = { 'type': 'expression.paren', 'value' : p[2] }
         
-def p_expression_number(p):
+
+def p_expression_value(p):
     '''
     expression : const
+               | reference
     '''
     if debug > 5:
         p[0] = { 'type': 'expression.%s' %  p.slice[1].type, 'value' : p[1] }
     else:
         p[0] = p[1]
+
+
+# Referencia: Variable con nombre que se debe acceder para obtener el valor.
+def p_reference(p):
+    '''
+    reference : ID
+    '''
+    p[0] = { 'type' : 'reference.%s' % p.slice[1].type, 'value' : p[1] }
     
 
-def calculate(expr):
-    if type(expr) is not dict: return expr
-    etype = expr['type'].split(".")
-    if etype[0] == "expression": return calculate_expression(expr,etype)
-    if etype[0] == "const": return calculate(expr['value'])
-    raise ValueError, "Unknown type: %s" % ".".join(etype)
-    
-def calculate_expression(expr,etype):
-    if etype[1] == "math": return calculate_expression_math(expr,etype)
-    if etype[1] == "paren": return calculate(expr['value'])
-    if etype[1] == "const": return calculate(expr['value'])
-    raise ValueError, "Unknown type: %s" % ".".join(etype)
+# Instrucción: parte de programa que realiza una operación.    
+def p_instruction_expression(p):
+    '''
+    instruction : expression 
+    '''
+    p[0] = { 'type': 'instruction.%s' %  p.slice[1].type, 'value' : p[1] }
 
-def calculate_expression_math(expr,etype):
-    vlist = [ calculate(e) for e in expr['valuelist'] ]
-    startval = vlist[0]
-    endlist = vlist[1:]
-    function = None
-    if etype[2] == "PLUS": function = lambda x,y: x+y
-    if etype[2] == "MINUS": function = lambda x,y: x-y
-    if etype[2] == "TIMES": function = lambda x,y: x*y  
-    if etype[2] == "DIVIDE": function = lambda x,y: x/y
-        
-    if function is None:
-        raise ValueError, "Unknown type: %s" % ".".join(etype)
-    return reduce(function, endlist, startval)
+# (Instrucción) Asignación: guardar el resultado de un cómputo en una variable.
+# TODO: Incluir operadores de permutación: += ++ -= --
+def p_instruction_assigment(p):
+    '''
+    instruction : reference EQUALS expression
+    '''
+    p[0] = { 'type': 'instruction.assigment', 'dest' : p[1], 'value' : p[3] }
+
+# (Instrucción) Llamada: (TODO) Ejecutar función de un nombre dado.
+
+# (Instrucción) Error: Composición de instrucción errónea. Se omite.    
+def p_instruction_error(p):
+    '''
+    instruction : error
+    '''
+    error = "FATAL: Syntax error in input, line %d, character %s!" % (p[1].lineno,repr(p[1].value))
+    print error
     
+    p[0] =  { 'type': 'instruction.%s' %  p.slice[1].type, 'value' : error }
+
+
+
+# Set de instrucciones: Colección de una o más instrucciones a ejecutar en orden.
+def p_instructionset (p):
+    '''
+    instructionset : instruction
+                   | instructionset SEMI
+                   | instructionset SEMI instruction
+    '''
+    instructionlist = []
+    typelist = " ".join([ x.type for x in p.slice[1:] ])
+    if typelist == 'instruction': 
+        instructionlist = [p[1]]
+    elif typelist == 'instructionset SEMI': 
+        instructionlist = p[1]['instructionlist']
+    elif typelist == 'instructionset SEMI instruction': 
+        instructionlist = p[1]['instructionlist'] + [p[3]]
+    else:
+        print "PANIC: Unknown instruction set %s" % repr(typelist)
     
-        
+    p[0] = { 'type': 'instructionset', 'instructionlist' : instructionlist }
+
+
+# TODO: instruction blocks: { abc; abc; abc; }
+
+# TODO: flow-control instructions: for, while, if, class, function, ..
+
+
+start = 'instructionset'
+debug = 20
+
+
+
     
     
 # Error rule for syntax errors
 def p_error(p):
-    print "Syntax error in input!"
+    error = "FATAL: Syntax error in input, line %d, character %s!" % (p.lineno,repr(p.value))
+    #print "**" , error
+    return error 
+
+
 
 # Build the parser
 parser = yacc.yacc(errorlog=yacc.NullLogger())
-import yaml
-import sys
+#parser = yacc.yacc()
 
-def float_representer(dumper, data):
-    value = (u'%.6f' % data).rstrip("0")
+def main():
+    import yaml
+    import sys
+    from qsacalculate import calculate
+
+    def float_representer(dumper, data):
+        value = (u'%.6f' % data).rstrip("0")
     
-    if len(value) == 0 or value.endswith("."): value += "0"
+        if len(value) == 0 or value.endswith("."): value += "0"
 
-    #ret = dumper.represent_scalar('!float', value)
-    ret = yaml.ScalarNode(u'tag:yaml.org,2002:float',value)
-    #print ret, dir(ret), repr(ret)
-    return ret
+        #ret = dumper.represent_scalar('!float', value)
+        ret = yaml.ScalarNode(u'tag:yaml.org,2002:float',value)
+        #print ret, dir(ret), repr(ret)
+        return ret
 
-yaml.add_representer(float, float_representer)
+    yaml.add_representer(float, float_representer)
 
-if len(sys.argv) > 1:
-    s = " ".join(sys.argv[1:])
-    print "Input data:", s
-    result = parser.parse(s)
-    print "Result:", calculate(result)
-    print "Eval:", eval(s)
-    print "---"
-    print yaml.dump(result)
-    sys.exit(0)
+    if len(sys.argv) > 1:
+        s = " ".join(sys.argv[1:])
+        print "Input data:", s
+        result = parser.parse(s)
+        try:
+            print "Result:", calculate(result)
+        except Exception, e:
+            print "Error calculating:", type(e).__name__, " ".join([str(x) for x in e.args])
+        try:
+            print "Eval:", eval(s)
+        except Exception, e:
+            print "Error evaluating:", type(e).__name__, " ".join([str(x) for x in e.args])
+    
+        print "---"
+        print yaml.dump(result)
+        sys.exit(0)
 
 
-while True:
-    try:
-        s = raw_input('calc > ')
-    except EOFError:
-        break
-    if not s: continue
-    result = parser.parse(s)
-    print yaml.dump(result)
+    while True:
+        try:
+            s = raw_input('calc > ')
+        except EOFError:
+            break
+        if not s: continue
+        result = parser.parse(s)
+        print yaml.dump(result)
+
+    
+if __name__ == "__main__":
+    main()
 
