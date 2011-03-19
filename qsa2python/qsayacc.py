@@ -1,6 +1,4 @@
-
 import ply.yacc as yacc
-
 from qsalexer import tokens
 precedence = (
     ('left', 'PLUS', 'MINUS'),
@@ -38,11 +36,11 @@ def p_expression(p):
                | expression DIVIDE expression
     '''
         
-    p[0] = { 'type': 'expression.math.%s' % p.slice[2].type, 'values' : [p[1], p[3] ] }
+    p[0] = { 'type': 'expression.math.%s' % p.slice[2].type, 'valuelist' : [p[1], p[3] ] }
     if type(p[1]) is dict:
         if p[1]['type'] == p[0]['type']:
-            del p[0]['values'][0]
-            p[0]['values'] = p[1]['values'] + p[0]['values'] 
+            del p[0]['valuelist'][0]
+            p[0]['valuelist'] = p[1]['valuelist'] + p[0]['valuelist'] 
             
                 
     
@@ -80,19 +78,18 @@ def calculate_expression(expr,etype):
     raise ValueError, "Unknown type: %s" % ".".join(etype)
 
 def calculate_expression_math(expr,etype):
-    vlist = [ calculate(e) for e in expr['values'] ]
+    vlist = [ calculate(e) for e in expr['valuelist'] ]
     startval = vlist[0]
     endlist = vlist[1:]
     function = None
     if etype[2] == "PLUS": function = lambda x,y: x+y
     if etype[2] == "MINUS": function = lambda x,y: x-y
     if etype[2] == "TIMES": function = lambda x,y: x*y  
-    if etype[2] == "DIVIDE": function = lambda x,y: x/float(y)
+    if etype[2] == "DIVIDE": function = lambda x,y: x/y
         
     if function is None:
         raise ValueError, "Unknown type: %s" % ".".join(etype)
     return reduce(function, endlist, startval)
-    
     
     
         
@@ -103,23 +100,39 @@ def p_error(p):
     print "Syntax error in input!"
 
 # Build the parser
-parser = yacc.yacc()
+parser = yacc.yacc(errorlog=yacc.NullLogger())
 import yaml
-#s = "2+3+3/2.5/3.2+3+3*(5+6+8+9*2)"
-s = """ "Hola" + " ." * 5 + "mundo"
-"""
-result = parser.parse(s)
-print "Result:", calculate(result)
-print "Eval:", eval(s)
+import sys
 
-print yaml.dump(result)
-"""
+def float_representer(dumper, data):
+    value = (u'%.6f' % data).rstrip("0")
+    
+    if len(value) == 0 or value.endswith("."): value += "0"
+
+    #ret = dumper.represent_scalar('!float', value)
+    ret = yaml.ScalarNode(u'tag:yaml.org,2002:float',value)
+    #print ret, dir(ret), repr(ret)
+    return ret
+
+yaml.add_representer(float, float_representer)
+
+if len(sys.argv) > 1:
+    s = " ".join(sys.argv[1:])
+    print "Input data:", s
+    result = parser.parse(s)
+    print "Result:", calculate(result)
+    print "Eval:", eval(s)
+    print "---"
+    print yaml.dump(result)
+    sys.exit(0)
+
+
 while True:
-   try:
-       s = raw_input('calc > ')
-   except EOFError:
-       break
-   if not s: continue
-   result = parser.parse(s)
-   print yaml.dump(result)
-"""
+    try:
+        s = raw_input('calc > ')
+    except EOFError:
+        break
+    if not s: continue
+    result = parser.parse(s)
+    print yaml.dump(result)
+
