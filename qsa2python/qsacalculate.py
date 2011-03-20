@@ -24,9 +24,37 @@ def calculate_reference(expr,etype):
     
 def calculate_instruction_assigment(expr,etype):
     dest = calculate(expr['dest']['value'])
-    value = calculate(expr['value'])
-    variables[dest] = value
-    return value
+    prevvalue = None
+   
+    if etype[2] != "EQUALS":
+        if dest not in variables: raise AttributeError, "Variable name %s not defined. Required for %s." % (dest,etype[2])
+        prevvalue = variables[dest] 
+        
+    if 'value' in expr:
+        value = calculate(expr['value'])
+    else:
+        value = None
+        
+    if etype[2] == "EQUALS":
+        newvalue = value
+    elif etype[2] == "PLUSPLUS":
+        newvalue = prevvalue + 1
+    elif etype[2] == "MINUSMINUS":
+        newvalue = prevvalue - 1
+    elif etype[2] == "PLUSEQUAL":
+        newvalue = prevvalue + value
+    elif etype[2] == "MINUSEQUAL":
+        newvalue = prevvalue - value
+    elif etype[2] == "TIMESEQUAL":
+        newvalue = prevvalue * value
+    elif etype[2] == "DIVEQUAL":
+        newvalue = prevvalue / value
+    elif etype[2] == "MODEQUAL":
+        newvalue = prevvalue % value
+        
+    
+    variables[dest] = newvalue
+    return newvalue
 
 def calculate_instructionset(expr,etype):
     ret = None

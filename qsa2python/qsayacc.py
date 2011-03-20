@@ -5,6 +5,9 @@ precedence = (
     ('left', 'PLUS', 'MINUS'),
     ('left', 'TIMES', 'DIVIDE'),
 )
+def p_empty(p):
+    'empty :'
+    pass
 
 # Constante: Valor inmediato. Entero, Float, String, Carácter, Expresión regular.
 def p_const(p): 
@@ -55,6 +58,7 @@ def p_expression_value(p):
     '''
     expression : const
                | reference
+               | call
     '''
     if debug > 5:
         p[0] = { 'type': 'expression.%s' %  p.slice[1].type, 'value' : p[1] }
@@ -65,25 +69,91 @@ def p_expression_value(p):
 # Referencia: Variable con nombre que se debe acceder para obtener el valor.
 def p_reference(p):
     '''
-    reference : ID
+    reference   : ID
+                | reference PERIOD ID
+                | call PERIOD ID
     '''
-    p[0] = { 'type' : 'reference.%s' % p.slice[1].type, 'value' : p[1] }
+    typelist = " ".join([ x.type for x in p.slice[1:] ])
+    if typelist == 'ID': 
+        p[0] = { 'type' : 'reference.ID', 'value' : p[1], 'parent' : [] }
+    elif typelist == 'reference PERIOD ID':
+        parent = p[1]['parent'] + [p[1]['value']]
+        p[0] = { 'type' : 'reference.ID', 'value' : p[3], 'parent' : parent}
+    elif typelist == 'call PERIOD ID': 
+        parent = p[1]['method']['parent'] + [p[1]]
+        p[1]['method']['parent'] = []
+        p[0] = { 'type' : 'reference.ID', 'value' : p[3], 'parent' : parent}
+    else:
+        print "PANIC: Unknown argument list %s" % repr(typelist)
+    
+# Llamada: Ejecución de una función a la que apunta la referencia
+def p_call(p):
+    '''
+    call : reference argumentlist
+    '''
+    p[0] = { 'type' : 'call', 'method' : p[1] , 'args' : p[2]}
+
+def p_argumentlist(p):
+    '''
+    argumentlist : LPAREN RPAREN
+                 | LPAREN argumentset RPAREN
+    '''
+    typelist = " ".join([ x.type for x in p.slice[1:] ])
+    if typelist == 'LPAREN RPAREN': 
+        p[0] = []
+    elif typelist == 'LPAREN argumentset RPAREN': 
+        p[0] = p[2]
+    else:
+        print "PANIC: Unknown argument list %s" % repr(typelist)
+    
     
 
-# Instrucción: parte de programa que realiza una operación.    
+def p_argumentset(p):
+    '''
+    argumentset : expression
+                | argumentset COMMA expression
+    '''
+    typelist = " ".join([ x.type for x in p.slice[1:] ])
+    if typelist == 'expression': 
+        p[0] = [p[1]]
+    elif typelist == 'argumentset COMMA expression': 
+        p[0] = p[1] + [p[3]]
+    else:
+        print "PANIC: Unknown argument set %s" % repr(typelist)
+    
+    
+
+# Instrucción: parte de programa que realiza una operación.  
 def p_instruction_expression(p):
     '''
     instruction : expression 
     '''
+    subtype = p[1]['type']
+    
     p[0] = { 'type': 'instruction.%s' %  p.slice[1].type, 'value' : p[1] }
+    if subtype != 'call':
+        p[0]['warning'] =  'Using non-call expression (%s) as instruction' % repr(subtype)
 
 # (Instrucción) Asignación: guardar el resultado de un cómputo en una variable.
-# TODO: Incluir operadores de permutación: += ++ -= --
 def p_instruction_assigment(p):
     '''
     instruction : reference EQUALS expression
+                | reference TIMESEQUAL expression
+                | reference DIVEQUAL expression
+                | reference MODEQUAL expression
+                | reference PLUSEQUAL expression
+                | reference MINUSEQUAL expression
+
     '''
-    p[0] = { 'type': 'instruction.assigment', 'dest' : p[1], 'value' : p[3] }
+    p[0] = { 'type': 'instruction.assigment.%s' %  p.slice[2].type, 'dest' : p[1], 'value' : p[3] }
+
+def p_instruction_assigment_2(p):
+    '''
+    instruction : reference PLUSPLUS
+                | reference MINUSMINUS
+    '''
+    p[0] = { 'type': 'instruction.assigment.%s' %  p.slice[2].type, 'dest' : p[1] }
+
 
 # (Instrucción) Llamada: (TODO) Ejecutar función de un nombre dado.
 
@@ -126,7 +196,7 @@ def p_instructionset (p):
 
 
 start = 'instructionset'
-debug = 20
+debug = 0
 
 
 
@@ -186,7 +256,12 @@ def main():
             break
         if not s: continue
         result = parser.parse(s)
-        print yaml.dump(result)
+        try:
+            print "Result:", calculate(result)
+        except Exception, e:
+            print "Error calculating:", type(e).__name__, " ".join([str(x) for x in e.args])
+        #print "---"
+        #print yaml.dump(result)
 
     
 if __name__ == "__main__":
