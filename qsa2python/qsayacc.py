@@ -72,17 +72,24 @@ def p_reference(p):
     reference   : ID
                 | reference PERIOD ID
                 | call PERIOD ID
+                | reference LBRACKET expression RBRACKET
     '''
     typelist = " ".join([ x.type for x in p.slice[1:] ])
     if typelist == 'ID': 
         p[0] = { 'type' : 'reference.ID', 'value' : p[1], 'parent' : [] }
     elif typelist == 'reference PERIOD ID':
-        parent = p[1]['parent'] + [p[1]['value']]
+        if p[1]['type'] == "reference.ID":
+            parent = p[1]['parent'] + [p[1]['value']]
+        else:
+            parent = [p[1]]
         p[0] = { 'type' : 'reference.ID', 'value' : p[3], 'parent' : parent}
     elif typelist == 'call PERIOD ID': 
         parent = p[1]['method']['parent'] + [p[1]]
         p[1]['method']['parent'] = []
         p[0] = { 'type' : 'reference.ID', 'value' : p[3], 'parent' : parent}
+    elif typelist == 'reference LBRACKET expression RBRACKET': 
+        parent = p[1]['parent'] + [p[1]['value']]
+        p[0] = { 'type' : 'reference.arrayelement', 'value' : p[3], 'parent' : parent}
     else:
         print "PANIC: Unknown argument list %s" % repr(typelist)
     
@@ -155,8 +162,6 @@ def p_instruction_assigment_2(p):
     p[0] = { 'type': 'instruction.assigment.%s' %  p.slice[2].type, 'dest' : p[1] }
 
 
-# (Instrucción) Llamada: (TODO) Ejecutar función de un nombre dado.
-
 # (Instrucción) Error: Composición de instrucción errónea. Se omite.    
 def p_instruction_error(p):
     '''
@@ -208,17 +213,11 @@ def p_error(p):
     #print "**" , error
     return error 
 
-
-
-# Build the parser
-parser = yacc.yacc(errorlog=yacc.NullLogger())
-#parser = yacc.yacc()
-
-def main():
+yaml_configured = False
+def configure_yaml():
+    global yaml_configured
+    if yaml_configured: return True
     import yaml
-    import sys
-    from qsacalculate import calculate
-
     def float_representer(dumper, data):
         value = (u'%.6f' % data).rstrip("0")
     
@@ -230,6 +229,17 @@ def main():
         return ret
 
     yaml.add_representer(float, float_representer)
+    yaml_configured = True
+
+# Build the parser
+parser = yacc.yacc(errorlog=yacc.NullLogger())
+#parser = yacc.yacc()
+
+def main():
+    import sys
+    from qsacalculate import calculate
+    import yaml
+    configure_yaml()
 
     if len(sys.argv) > 1:
         s = " ".join(sys.argv[1:])
