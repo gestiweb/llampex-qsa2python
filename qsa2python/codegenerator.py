@@ -40,6 +40,8 @@ def gc_instructionset(obj):
         source.append(gc(instruction))
     return source
 
+def gc_instruction_error(obj):
+    return "# " + obj['value']
 
 def gc_instruction_expression(obj):
     ret = gc(obj['value'])
