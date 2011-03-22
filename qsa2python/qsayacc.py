@@ -63,6 +63,7 @@ def p_expression_value(p):
     expression : const
                | reference
                | call
+               | newinstance
     '''
     if debug > 5:
         p[0] = { 'type': 'expression.%s' %  p.slice[1].type, 'value' : p[1] }
@@ -103,6 +104,19 @@ def p_call(p):
     call : reference argumentlist
     '''
     p[0] = { 'type' : 'call', 'method' : p[1] , 'args' : p[2]}
+
+def p_newinstance(p):
+    '''
+    newinstance : NEW reference argumentlist
+    '''
+    p[0] = { 'type' : 'newinstance', 'method' : p[2] , 'args' : p[3]}
+
+def p_newinstance_2(p):
+    '''
+    newinstance : NEW reference 
+    '''
+    p[0] = { 'type' : 'newinstance', 'method' : p[2] , 'args' : []}
+    
 
 def p_argumentlist(p):
     '''
@@ -147,6 +161,14 @@ def p_instruction_expression(p):
     p[0] = { 'type': 'instruction.%s' %  p.slice[1].type, 'value' : p[1] }
     if subtype != 'call':
         p[0]['warning'] =  'Using non-call expression (%s) as instruction' % repr(subtype)
+
+def p_instruction_return(p):
+    '''
+    instruction : RETURN expression 
+    '''
+    
+    p[0] = { 'type': 'instruction.return', 'value' : p[2] }
+    
 
 # (Instrucción) Asignación: guardar el resultado de un cómputo en una variable.
 def p_instruction_assigment(p):
@@ -336,11 +358,30 @@ def p_functionarglist(p):
     
 
 # TODO: flow-control instructions: for, while, if, class, function, ..
-def p_function(p):
+def p_instruction_function(p):
     '''
     instruction    : FUNCTION ID functionarglist instruction
     '''
     p[0] = { 'type' : 'instruction.function', 'name' : p[2], 'argumentlist' : p[3], 'source' : p[4] }
+
+def p_classextends(p):
+    '''
+        classextends : EXTENDS ID
+    '''
+    p[0] = p[2]
+    
+def p_classextends_empty(p):
+    '''
+        classextends : empty
+    '''
+    p[0] = None
+    
+
+def p_instruction_class(p):
+    '''
+    instruction    : CLASS ID classextends instruction
+    '''
+    p[0] = { 'type' : 'instruction.class', 'name' : p[2], 'extends' : p[3], 'source' : p[4] }
 
 
 

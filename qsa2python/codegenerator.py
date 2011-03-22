@@ -80,18 +80,36 @@ def gc_vardef(obj):
     #name: b, type: vardef, value: null, vartype: String
     ret = obj['name']
     if obj['value'] is not None:
-        ret += " = " + gc(obj['value'])
+        ret += " = " + str(gc(obj['value']))
     return ret
 
 def gc_instructionblock(obj):
     return gc(obj['value'])
 
+classname = None
+
 def gc_instruction_function(obj):
+    global classname
     arglist = obj['argumentlist']
+    if classname is not None:
+        arglist.insert(0,"self")
     obj['finalarglist'] = ", ".join([gc(arg) for arg in arglist])
     ret = []
     ret.append("def %(name)s(%(finalarglist)s):" % obj)
     ret.append(gc(obj['source']))
+    return ret
+
+def gc_instruction_class(obj):
+    global classname
+    if obj['extends']:
+        obj['finalextends'] = obj['extends']
+    else:
+        obj['finalextends'] = "object"
+    ret = []
+    ret.append("class %(name)s(%(finalextends)s):" % obj)
+    classname = obj['name']
+    ret.append(gc(obj['source']))
+    classname = None
     return ret
     
 def gc_instruction_expression(obj):
@@ -99,6 +117,19 @@ def gc_instruction_expression(obj):
     if 'warning' in obj:
         ret += " # WARN: %(warning)s" % obj
     return ret
+
+def gc_instruction_return(obj):
+    ret = "return " + str(gc(obj['value']))
+    if 'warning' in obj:
+        ret += " # WARN: %(warning)s" % obj
+    return ret
+
+def gc_newinstance(obj):
+    obj['final_method'] = gc(obj['method'])
+    obj['final_args'] = ", ".join([str(gc(x)) for x in obj['args'] ])
+    
+    return "%(final_method)s(%(final_args)s) # NEW" % obj
+
 
 def gc_instruction_vardef(obj):
     ret = gc(obj['value'])
