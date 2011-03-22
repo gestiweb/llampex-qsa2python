@@ -172,14 +172,29 @@ def p_instruction_error(p):
     
     p[0] =  { 'type': 'instruction.%s' %  p.slice[1].type, 'value' : error }
 
+def p_instruction_semi(p):
+    '''
+    instruction : instruction SEMI
+    '''
+    
+    p[1]['semi'] = True
+    p[0] =  p[1]
 
+
+# (Instrucción) Bloque:
+def p_instruction_block(p):
+    '''
+    instruction : instructionblock
+    '''
+    
+    p[0] =  { 'type': 'instructionblock', 'value' : p[1] }
 
 # Set de instrucciones: Colección de una o más instrucciones a ejecutar en orden.
-def p_instructionset (p):
+# TODO: Optional SEMI
+def p_instructionset(p):
     '''
     instructionset : instruction
-                   | instructionset SEMI
-                   | instructionset SEMI instruction
+                   | instructionset instruction
     '''
     instructionlist = []
     typelist = " ".join([ x.type for x in p.slice[1:] ])
@@ -189,6 +204,8 @@ def p_instructionset (p):
         instructionlist = p[1]['instructionlist']
     elif typelist == 'instructionset SEMI instruction': 
         instructionlist = p[1]['instructionlist'] + [p[3]]
+    elif typelist == 'instructionset instruction': 
+        instructionlist = p[1]['instructionlist'] + [p[2]]
     else:
         print "PANIC: Unknown instruction set %s" % repr(typelist)
     
@@ -196,8 +213,85 @@ def p_instructionset (p):
 
 
 # TODO: instruction blocks: { abc; abc; abc; }
+def p_instructionblock(p):
+    '''
+    instructionblock : LBRACE instructionset RBRACE
+    '''
+    p[0] = p[2]
+
+def p_instructionblock_empty(p):
+    '''
+    instructionblock : LBRACE RBRACE
+    '''
+    p[0] = { 'type': 'instructionset', 'instructionlist' : [] }
+
+
+def p_vardefopttype(p):
+    '''
+    vardefopttype   : empty
+    '''
+    p[0] = None
+
+def p_vardefoptdefval(p):
+    '''
+    vardefoptdefval : empty
+    '''
+    p[0] = None
+    
+def p_vardefopttype2(p):
+    '''
+    vardefopttype   : COLON ID
+    '''
+    p[0] = p[2]
+
+def p_vardefoptdefval2(p):
+    '''
+    vardefoptdefval : EQUALS expression
+    '''
+    p[0] = p[2]
+    
+    
+def p_vardef(p):
+    '''
+    vardef  : ID vardefopttype vardefoptdefval
+    '''
+    p[0] = {'type' : 'vardef' , 'name': p[1], 'vartype' : p[2], 'value' : p[3]}
+    
+
+def p_functionargset(p):
+    '''
+    functionargset  : vardef
+                    | functionargset COMMA vardef
+    '''
+    typelist = " ".join([ x.type for x in p.slice[1:] ])
+    if typelist == 'vardef': 
+        p[0] = [p[1]]
+    elif typelist == 'functionargset COMMA vardef': 
+        p[0] = p[1] + [p[3]]
+    else:
+        print "PANIC: Unknown argument set %s" % repr(typelist)
+
+def p_functionarglist(p):
+    '''
+    functionarglist : LPAREN functionargset RPAREN 
+                    | LPAREN RPAREN
+    '''
+    typelist = " ".join([ x.type for x in p.slice[1:] ])
+    if typelist == 'LPAREN functionargset RPAREN': 
+        p[0] = p[2]
+    elif typelist == 'LPAREN RPAREN': 
+        p[0] = []
+    else:
+        print "PANIC: Unknown argument set %s" % repr(typelist)
+    
 
 # TODO: flow-control instructions: for, while, if, class, function, ..
+def p_function(p):
+    '''
+    instruction    : FUNCTION ID functionarglist instruction
+    '''
+    p[0] = { 'type' : 'instruction.function', 'name' : p[2], 'argumentlist' : p[3], 'source' : p[4] }
+
 
 
 start = 'instructionset'
@@ -232,8 +326,10 @@ def configure_yaml():
     yaml_configured = True
 
 # Build the parser
-parser = yacc.yacc(errorlog=yacc.NullLogger())
-#parser = yacc.yacc()
+try:
+    parser = yacc.yacc(errorlog=yacc.NullLogger())
+except:
+    parser = yacc.yacc()
 
 def main():
     import sys

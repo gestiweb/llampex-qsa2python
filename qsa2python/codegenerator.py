@@ -7,11 +7,27 @@ def generatecode(obj):
     objlist = gc(obj)
     indent = "    "
     txt = []
-    depth = 0
-    for obj in objlist:
-        txt.append(indent*depth + obj)
+    flatcode = flattencode(objlist)
+    #print repr(flatcode)
+    for depth,obj in flatcode:
+        txt.append(indent*depth + str(obj))
         
     return "\n".join(txt) + "\n"
+
+def flattencode(objlist, depth = 0):
+    flatval = []
+    for obj in objlist:
+        if type(obj) is list:
+            newlines = flattencode(obj, depth+1)
+            flatval += newlines
+            if depth == 0:
+                flatval.append( (depth, "") )
+            if len(newlines)>10:
+                flatval.append( (depth, "") )
+        else:
+            flatval.append( (depth, obj) )
+    return flatval
+        
     
 
 def gc(obj):
@@ -30,6 +46,8 @@ def gc(obj):
             else:
                 print "FATAL: No function suitable found for type %s" % repr(obj['type'])
                 print "function list that we've looked for: %s" % " , ".join(lookedfor)
+                print "YAML Interpretation:"
+                print yaml.dump(obj)
                 return None
         
     return function(obj)
@@ -37,12 +55,32 @@ def gc(obj):
 def gc_instructionset(obj):
     source = []
     for instruction in obj['instructionlist']:
-        source.append(gc(instruction))
+        val = gc(instruction)
+        if type(val) is list: source += val
+        else: source.append(val)
     return source
-
+    
 def gc_instruction_error(obj):
     return "# " + obj['value']
 
+def gc_vardef(obj):
+    #name: b, type: vardef, value: null, vartype: String
+    ret = obj['name']
+    if obj['value'] is not None:
+        ret += " = " + gc(obj['value'])
+    return ret
+
+def gc_instructionblock(obj):
+    return gc(obj['value'])
+
+def gc_instruction_function(obj):
+    arglist = obj['argumentlist']
+    obj['finalarglist'] = ", ".join([gc(arg) for arg in arglist])
+    ret = []
+    ret.append("def %(name)s(%(finalarglist)s):" % obj)
+    ret.append(gc(obj['source']))
+    return ret
+    
 def gc_instruction_expression(obj):
     ret = gc(obj['value'])
     if 'warning' in obj:
@@ -134,10 +172,11 @@ def main():
         print s
         print
         result = parser.parse(s)
-        print "YAML Interpretation:"
-        print yaml.dump(result)
+        #print "YAML Interpretation:"
+        #print yaml.dump(result)
         print
         print "Output:"
+        print
         print generatecode(result)
         print
         sys.exit(0)
