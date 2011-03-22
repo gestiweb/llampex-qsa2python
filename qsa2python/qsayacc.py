@@ -1,6 +1,10 @@
 # encoding: UTF-8
 import ply.yacc as yacc
 from qsalexer import tokens
+import sys
+
+global last_error_lextoken
+last_error_lextoken = None
 precedence = (
     ('left', 'PLUS', 'MINUS'),
     ('left', 'TIMES', 'DIVIDE'),
@@ -91,7 +95,7 @@ def p_reference(p):
         parent = p[1]['parent'] + [p[1]['value']]
         p[0] = { 'type' : 'reference.arrayelement', 'value' : p[3], 'parent' : parent}
     else:
-        print "PANIC: Unknown argument list %s" % repr(typelist)
+        print >> sys.stderr, "PANIC: Unknown argument list %s" % repr(typelist)
     
 # Llamada: Ejecución de una función a la que apunta la referencia
 def p_call(p):
@@ -111,7 +115,7 @@ def p_argumentlist(p):
     elif typelist == 'LPAREN argumentset RPAREN': 
         p[0] = p[2]
     else:
-        print "PANIC: Unknown argument list %s" % repr(typelist)
+        print >> sys.stderr, "PANIC: Unknown argument list %s" % repr(typelist)
     
     
 
@@ -126,7 +130,7 @@ def p_argumentset(p):
     elif typelist == 'argumentset COMMA expression': 
         p[0] = p[1] + [p[3]]
     else:
-        print "PANIC: Unknown argument set %s" % repr(typelist)
+        print >> sys.stderr, "PANIC: Unknown argument set %s" % repr(typelist)
     
     
 
@@ -135,7 +139,10 @@ def p_instruction_expression(p):
     '''
     instruction : expression 
     '''
-    subtype = p[1]['type']
+    if type(p[1]) is dict:
+        subtype = p[1]['type']
+    else:
+        subtype = "value"
     
     p[0] = { 'type': 'instruction.%s' %  p.slice[1].type, 'value' : p[1] }
     if subtype != 'call':
@@ -161,15 +168,44 @@ def p_instruction_assigment_2(p):
     '''
     p[0] = { 'type': 'instruction.assigment.%s' %  p.slice[2].type, 'dest' : p[1] }
 
+def p_commentlines(p):
+    '''
+    commentlines : RAWDATA
+                 | commentlines RAWDATA
+    '''
+    if len(p) == 2:
+        p[0] = p[1]
+    else:
+        p[0] = p[1]+p[2]
+
+
+def p_instruction_comment(p):
+    '''
+    instruction : COMMENTBLOCKSTART COMMENTBLOCKEND
+                | COMMENTBLOCKSTART commentlines COMMENTBLOCKEND
+                | COMMENTLINE
+                
+    '''
+    p[0] = { 'type': 'instruction.comment', 'value' : ("".join(p[1:])).split("\n") }
+
 
 # (Instrucción) Error: Composición de instrucción errónea. Se omite.    
 def p_instruction_error(p):
     '''
-    instruction : error
-    '''
-    error = "FATAL: Syntax error in input, line %d, character %s!" % (p[1].lineno,repr(p[1].value))
-    print error
+    instruction     : error SEMI
+                    | error NEWLINE
+                    | error ID
+                    | error RBRACE
+                    | error RPAREN
     
+    '''
+    global last_error_lextoken
+
+    context = p.lexer.lexdata[last_error_lextoken.lexpos:p.lexpos(2)+1].split()[0]
+    error = "FATAL: Syntax error in input, line %d-%d, at %d-%d! %s" % (last_error_lextoken.lineno,p[1].lineno, last_error_lextoken.lexpos, p.lexpos(2),repr(context))
+
+    print >> sys.stderr, error
+
     p[0] =  { 'type': 'instruction.%s' %  p.slice[1].type, 'value' : error }
 
 def p_instruction_semi(p):
@@ -180,6 +216,13 @@ def p_instruction_semi(p):
     p[1]['semi'] = True
     p[0] =  p[1]
 
+
+def p_instruction_newline(p):
+    '''
+    instruction : instruction NEWLINE
+    '''
+    p[1]['newline'] = True
+    p[0] =  p[1]
 
 # (Instrucción) Bloque:
 def p_instruction_block(p):
@@ -207,7 +250,7 @@ def p_instructionset(p):
     elif typelist == 'instructionset instruction': 
         instructionlist = p[1]['instructionlist'] + [p[2]]
     else:
-        print "PANIC: Unknown instruction set %s" % repr(typelist)
+        print >> sys.stderr, "PANIC: Unknown instruction set %s" % repr(typelist)
     
     p[0] = { 'type': 'instructionset', 'instructionlist' : instructionlist }
 
@@ -276,7 +319,7 @@ def p_functionargset(p):
     elif typelist == 'functionargset COMMA vardef': 
         p[0] = p[1] + [p[3]]
     else:
-        print "PANIC: Unknown argument set %s" % repr(typelist)
+        print >> sys.stderr, "PANIC: Unknown argument set %s" % repr(typelist)
 
 def p_functionarglist(p):
     '''
@@ -289,7 +332,7 @@ def p_functionarglist(p):
     elif typelist == 'LPAREN RPAREN': 
         p[0] = []
     else:
-        print "PANIC: Unknown argument set %s" % repr(typelist)
+        print >> sys.stderr, "PANIC: Unknown argument set %s" % repr(typelist)
     
 
 # TODO: flow-control instructions: for, while, if, class, function, ..
@@ -310,8 +353,14 @@ debug = 0
     
 # Error rule for syntax errors
 def p_error(p):
-    error = "FATAL: Syntax error in input, line %d, character %s!" % (p.lineno,repr(p.value))
-    #print "**" , error
+    global last_error_lextoken
+    last_error_lextoken = p
+    if p:
+        error = "FATAL: Syntax error in input, line %d, character %s!" % (p.lineno,repr(p.value))
+    else:
+        error = "PANIC: no data in parser!?"        
+        print >> sys.stderr, "**" , error
+        
     return error 
 
 yaml_configured = False

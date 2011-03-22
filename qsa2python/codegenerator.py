@@ -1,6 +1,6 @@
 # encoding: UTF-8
 from qsayacc import parser, configure_yaml
-import yaml
+import yaml,sys
 
 
 def generatecode(obj):
@@ -15,6 +15,7 @@ def generatecode(obj):
     return "\n".join(txt) + "\n"
 
 def flattencode(objlist, depth = 0):
+    if not objlist: return []
     flatval = []
     for obj in objlist:
         if type(obj) is list:
@@ -44,11 +45,16 @@ def gc(obj):
             if len(objtype) > 2: 
                 objtype = objtype[:-1]
             else:
-                print "FATAL: No function suitable found for type %s" % repr(obj['type'])
-                print "function list that we've looked for: %s" % " , ".join(lookedfor)
-                print "YAML Interpretation:"
-                print yaml.dump(obj)
-                return None
+                ret = [
+                    "\"\"\"",
+                    "   FATAL: No function suitable found for type %s" % repr(obj['type']),
+                    "   function list that we've looked for: %s" % " , ".join(lookedfor),
+                    "   YAML Interpretation:",
+                    "",
+                ]
+                ret += [ "        " + line for line in (yaml.dump(obj)).split("\n") ]
+                ret.append('"""')
+                return "\n".join(ret)
         
     return function(obj)
 
@@ -58,10 +64,17 @@ def gc_instructionset(obj):
         val = gc(instruction)
         if type(val) is list: source += val
         else: source.append(val)
+        if 'newline' in instruction:
+            if instruction['newline']:
+                source.append("")
+                
     return source
     
 def gc_instruction_error(obj):
     return "# " + obj['value']
+    
+def gc_instruction_comment(obj):
+    return [ "# %s " % x for x in obj['value'] ]
 
 def gc_vardef(obj):
     #name: b, type: vardef, value: null, vartype: String
@@ -82,7 +95,7 @@ def gc_instruction_function(obj):
     return ret
     
 def gc_instruction_expression(obj):
-    ret = gc(obj['value'])
+    ret = str(gc(obj['value']))
     if 'warning' in obj:
         ret += " # WARN: %(warning)s" % obj
     return ret
@@ -156,7 +169,7 @@ def gc_reference(obj):
     elif reftype == "arrayelement":
         txtfullid+="[%s]" % gc(obj['value'])
     else:
-        print "FATAL: unknown reference type %s" % repr(reftype)
+        print >> sys.stderr, "FATAL: unknown reference type %s" % repr(reftype)
     return txtfullid
 
 def gc_call(obj):
@@ -168,29 +181,66 @@ def gc_call(obj):
 
 
 
-
+opts = None
 
 def convert(source):
     result = parser.parse(source)
     return generatecode(result)
+    
+def debug_convert(s):
+    global opts
+    #print "Input program:"
+    #print s
+    #print
+    result = parser.parse(s)
+    if opts.yaml:
+        print 
+        print "YAML Output:"
+        print
+        print yaml.dump(result)
+    #print
+    #print "Output:"
+    code = generatecode(result)
+    print
+    print code
+    print
+    return code
+    
 
 def main():
     import sys
+    from optparse import OptionParser
+    parser = OptionParser()
+    parser.set_defaults( stdin = False, filename = False, source = False, yaml = False)
+    parser.add_option("-f", "--file",
+                  action="store_true", dest="filename")
+    parser.add_option("-s", "--source",
+                  action="store_true", dest="source")
+    parser.add_option("-i", "--stdin",
+                  action="store_true", dest="stdin")
+    parser.add_option("--yaml",
+                  action="store_true", dest="yaml")
+                  
     configure_yaml()
-    
-    if len(sys.argv) > 1:
-        s = " ".join(sys.argv[1:])
-        print "Input program:"
-        print s
-        print
-        result = parser.parse(s)
-        #print "YAML Interpretation:"
-        #print yaml.dump(result)
-        print
-        print "Output:"
-        print
-        print generatecode(result)
-        print
+    (options, args) = parser.parse_args()
+    global opts 
+    opts = options
+    if options.stdin + options.filename + options.source != 1:
+        print >> sys.stderr, "ERROR: debe especificar EXACTAMENTE uno de los siguientes flags: -f -s -i"
+        sys.exit(1)
+        
+    if options.source:
+        s = " ".join(args)
+        debug_convert(s)
+        sys.exit(0)
+
+    if options.stdin:
+        debug_convert(sys.stdin.read())
+        sys.exit(0)
+
+    if options.filename:
+        for filename in args:
+            debug_convert(open(filename).read())
         sys.exit(0)
 
     
