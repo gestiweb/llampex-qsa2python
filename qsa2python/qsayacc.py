@@ -22,9 +22,9 @@ def p_const(p):
     if p.slice[1].type == "FCONST":
         p[1] = float(p[1])
     if p.slice[1].type == "SCONST":
-        p[1] = str(p[1][1:-1])
+        p[1] = p[1] #str(p[1][1:-1])
     if p.slice[1].type == "CCONST":
-        p[1] = str(p[1][1:-1])
+        p[1] = p[1] #str(p[1][1:-1])
     if debug > 4:
         p[0] = { 'type' : 'const.%s' % p.slice[1].type, 'value' : p[1] }
     else:
@@ -250,6 +250,13 @@ def p_vardefoptdefval2(p):
     '''
     p[0] = p[2]
     
+def p_instruction_vardef(p):
+    '''
+    instruction : VAR vardef
+                | CONST vardef 
+    '''
+    p[0] = { 'type': 'instruction.%s' %  p.slice[2].type, 'value' : p[2] }
+
     
 def p_vardef(p):
     '''

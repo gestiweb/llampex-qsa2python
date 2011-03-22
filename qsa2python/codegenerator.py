@@ -86,6 +86,15 @@ def gc_instruction_expression(obj):
     if 'warning' in obj:
         ret += " # WARN: %(warning)s" % obj
     return ret
+
+def gc_instruction_vardef(obj):
+    ret = gc(obj['value'])
+    if obj['value']['value'] is None:
+        ret += " = None"
+        
+    if 'vartype' in obj['value']:
+        ret += " # type: %(vartype)s" % obj['value']
+    return ret
     
 def gc_expression_math(obj):
     objtype = str(obj['type']).split(".")
@@ -130,6 +139,9 @@ def gc_reference(obj):
     id_tr = { # Traduccion de nombres de variable.
         "this" : "self",
         "self" : "self_",
+        "true" : "True",
+        "false" : "False",
+        "null" : "None"
     }
     fullid = obj['parent'] 
     if reftype == "ID":
