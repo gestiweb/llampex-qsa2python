@@ -226,6 +226,7 @@ def gc_reference(obj):
     reftype = objtype[-1] # ID , arrayelement
     id_tr = { # Traduccion de nombres de variable.
         "this" : "self",
+        "parseFloat" : "float",
         "self" : "self_",
         "true" : "True",
         "false" : "False",
