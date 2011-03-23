@@ -66,6 +66,26 @@ def p_expression(p):
             p[0]['valuelist'] = p[1]['valuelist'] + p[0]['valuelist'] 
     update_lexpos(p)
             
+def p_expression_compare(p):
+    '''
+    expression : expression LT expression
+               | expression LE expression
+               | expression GT expression
+               | expression GE expression
+               | expression EQ expression
+               | expression NE expression
+    '''
+    p[0] = { 'type': 'expression.compare.%s' % p.slice[2].type, 'valuelist' : [p[1], p[3] ] }
+    update_lexpos(p)
+            
+def p_expression_boolcompare(p):
+    '''
+    expression : expression LOR expression
+               | expression LAND expression
+    '''
+    p[0] = { 'type': 'expression.boolcompare.%s' % p.slice[2].type, 'valuelist' : [p[1], p[3] ] }
+    update_lexpos(p)
+            
     
 
 def p_expression_paren(p):
@@ -184,7 +204,7 @@ def p_instruction_expression(p):
         subtype = "value"
     
     p[0] = { 'type': 'instruction.%s' %  p.slice[1].type, 'value' : p[1] }
-    if subtype != 'call':
+    if not subtype.endswith('call'):
         p[0]['warning'] =  'Using non-call expression (%s) as instruction' % repr(subtype)
     update_lexpos(p)
 
@@ -290,7 +310,6 @@ def p_instruction_block(p):
     update_lexpos(p)
 
 # Set de instrucciones: Colección de una o más instrucciones a ejecutar en orden.
-# TODO: Optional SEMI
 def p_instructionset(p):
     '''
     instructionset : instruction
@@ -313,7 +332,6 @@ def p_instructionset(p):
     update_lexpos(p)
 
 
-# TODO: instruction blocks: { abc; abc; abc; }
 def p_instructionblock(p):
     '''
     instructionblock : LBRACE instructionset RBRACE
@@ -404,6 +422,27 @@ def p_functionarglist(p):
     
 
 # TODO: flow-control instructions: for, while, if, class, function, ..
+def p_instruction_if(p):
+    '''
+    instruction : IF LPAREN expression RPAREN instruction
+                | IF LPAREN expression RPAREN instruction ELSE instruction
+    '''
+    p[0] = { 'type' : 'instruction.if', 'condition' : p[3], 'source' : p[5], 'source_else': None }
+    if len(p)>7:
+        p[0]['source_else'] = p[7]
+        
+    update_lexpos(p)
+
+
+def p_instruction_while(p):
+    '''
+    instruction : WHILE LPAREN expression RPAREN instruction
+    '''
+    p[0] = { 'type' : 'instruction.while', 'condition' : p[3], 'source' : p[5]}
+        
+    update_lexpos(p)
+
+    
 def p_instruction_function(p):
     '''
     instruction : FUNCTION ID functionarglist instruction

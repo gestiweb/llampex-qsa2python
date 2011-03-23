@@ -81,13 +81,13 @@ def gc_instructionset(obj):
                     lto = lasterror[1]
                     
                 global source_data
-                lineno1 = source_data.count("\n",0,lfrom) + 1
+                lineno1 = source_data.count("\n",0,lfrom+1) 
                 lineno2 = source_data.count("\n",0,lto)
-                code_start = source_data.rfind("\n",0,lfrom) + 1
+                code_start = source_data.rfind("\n",0,lfrom+1) + 1
                 code_end = source_data.find("\n",lto) 
                 
                 source.append("# see source: (%d-%d) " % (lineno1,lineno2)) 
-                for line in source_data[code_start:code_end].split("\n")[1:]:
+                for line in source_data[code_start:code_end].split("\n")[:]:
                     line = line.replace("\t","        ")
                     source.append("# > %s" % line) 
                 
@@ -132,6 +132,14 @@ def gc_instructionblock(obj):
 
 classname = None
 
+def getsource(objsource):
+    source = gc(objsource)
+    if type(source) is not list:
+        source = [source]
+        
+    return source
+
+
 def gc_instruction_function(obj):
     global classname
     arglist = obj['argumentlist']
@@ -140,7 +148,28 @@ def gc_instruction_function(obj):
     obj['finalarglist'] = ", ".join([gc(arg) for arg in arglist])
     ret = []
     ret.append("def %(name)s(%(finalarglist)s):" % obj)
-    ret.append(gc(obj['source']))
+    ret.append(getsource(obj['source']))
+    return ret
+
+def gc_instruction_if(obj):
+    global classname
+    obj['finalcondition'] = gc(obj['condition'])
+    ret = []
+    ret.append("if %(finalcondition)s:" % obj)
+    ret.append(getsource(obj['source']))
+    if obj['source_else']:
+        ret.append("else:" % obj)
+        ret.append(getsource(obj['source_else']))
+    
+    return ret
+
+def gc_instruction_while(obj):
+    global classname
+    obj['finalcondition'] = gc(obj['condition'])
+    ret = []
+    ret.append("while %(finalcondition)s:" % obj)
+    ret.append(getsource(obj['source']))
+    
     return ret
 
 def gc_instruction_class(obj):
@@ -193,6 +222,32 @@ def gc_expression_math(obj):
         "MINUS" : "-",
         "DIVIDE" : "/",
         "MOD" : "%",
+    }
+    operator = operator_tr[operatorname]
+    #print operatorname, obj['valuelist']
+    return (" %s " % operator).join([ str(gc(x)) for x in obj['valuelist'] ])
+
+def gc_expression_compare(obj):
+    objtype = str(obj['type']).split(".")
+    operatorname = objtype[-1]
+    operator_tr = { # traduccion de operadores matemáticos
+        'LT' : "<", 
+        'LE' : "<=", 
+        'GT' : ">", 
+        'GE' : ">=", 
+        'EQ' : "==", 
+        'NE' : "!=",
+    }
+    operator = operator_tr[operatorname]
+    #print operatorname, obj['valuelist']
+    return (" %s " % operator).join([ str(gc(x)) for x in obj['valuelist'] ])
+
+def gc_expression_boolcompare(obj):
+    objtype = str(obj['type']).split(".")
+    operatorname = objtype[-1]
+    operator_tr = { # traduccion de operadores matemáticos
+        'LOR' : "or", 
+        'LAND' : "and", 
     }
     operator = operator_tr[operatorname]
     #print operatorname, obj['valuelist']

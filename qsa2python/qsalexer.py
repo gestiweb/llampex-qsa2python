@@ -142,10 +142,10 @@ def t_ID(t):
 
 
 # Integer literal
-t_ICONST = r'\d+([uU]|[lL]|[uU][lL]|[lL][uU])?'
+t_ICONST = r'[+-]?\d+([uU]|[lL]|[uU][lL]|[lL][uU])?'
 
 # Floating literal
-t_FCONST = r'((\d+)(\.\d+)(e(\+|-)?(\d+))? | (\d+)e(\+|-)?(\d+))([lL]|[fF])?'
+t_FCONST = r'[+-]?((\d+)(\.\d+)(e(\+|-)?(\d+))? | (\d+)e(\+|-)?(\d+))([lL]|[fF])?'
 
 # String literal
 t_SCONST = r'\"([^\\\n]|(\\.))*?\"'
