@@ -59,7 +59,9 @@ def gc(obj):
                 ret.append('"""')
                 return "\n".join(ret)
         
-    return function(obj)
+    fretval = function(obj)
+    if type(fretval) is dict: return gc(fretval)
+    return fretval
 
 def gc_instructionset(obj):
     source = []
@@ -123,9 +125,10 @@ def gc_instruction_comment(obj):
 
 def gc_vardef(obj):
     #name: b, type: vardef, value: null, vartype: String
-    ret = obj['name']
+    ret = gc(obj['name'])
     if obj['value'] is not None:
-        ret += " = " + str(gc(obj['value']))
+        value = gc(obj['value'])
+        ret += " = " + str(value)
     return ret
 
 def gc_instructionblock(obj):
@@ -338,7 +341,8 @@ def gc_reference(obj):
         "self" : "self_",
         "true" : "True",
         "false" : "False",
-        "null" : "None"
+        "null" : "None",
+        "id" : "id_", # ID es palabra reservada en python.
     }
     fullid = obj['parent'] 
     if reftype == "ID":

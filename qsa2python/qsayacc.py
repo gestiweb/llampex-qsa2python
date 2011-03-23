@@ -391,9 +391,9 @@ def p_instruction_vardef(p):
     update_lexpos(p)
 
     
-def p_vardef(p):
+def p_vardef(p): # Se cambio ID por reference, para tratarlos por igual...
     '''
-    vardef  : ID vardefopttype vardefoptdefval
+    vardef  : reference vardefopttype vardefoptdefval
     '''
     p[0] = {'type' : 'vardef' , 'name': p[1], 'vartype' : p[2], 'value' : p[3]}
     update_lexpos(p)
