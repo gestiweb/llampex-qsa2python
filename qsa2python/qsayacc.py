@@ -442,6 +442,14 @@ def p_instruction_while(p):
         
     update_lexpos(p)
 
+def p_instruction_with(p):
+    '''
+    instruction : WITH LPAREN expression RPAREN instruction
+    '''
+    p[0] = { 'type' : 'instruction.with', 'condition' : p[3], 'source' : p[5]}
+        
+    update_lexpos(p)
+
     
 def p_instruction_function(p):
     '''

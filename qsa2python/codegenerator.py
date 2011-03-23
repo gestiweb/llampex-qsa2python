@@ -172,6 +172,15 @@ def gc_instruction_while(obj):
     
     return ret
 
+def gc_instruction_with(obj):
+    global classname
+    obj['finalcondition'] = gc(obj['condition'])
+    ret = []
+    ret.append("with %(finalcondition)s:" % obj)
+    ret.append(getsource(obj['source']))
+    
+    return ret
+
 def gc_instruction_class(obj):
     global classname
     if obj['extends']:
