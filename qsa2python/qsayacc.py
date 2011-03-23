@@ -9,6 +9,21 @@ precedence = (
     ('left', 'PLUS', 'MINUS'),
     ('left', 'TIMES', 'DIVIDE'),
 )
+
+def update_lexpos(p):
+    lexpos1 = [ p.lexspan(i) for i in range(1,len(p)) ]
+    lexpos2 = filter( lambda (x,y): x>0 and y>0, lexpos1)
+    lexpos2a = [x for x,y in lexpos2 ]
+    lexpos2b = [y for x,y in lexpos2 ]
+    for element in p[1:]:
+        if type(element) is not dict: continue
+        if 'lexpos' not in element: continue
+        lexpos2a.append(element['lexpos'][0])
+        lexpos2b.append(element['lexpos'][1])
+        
+    if type(p[0]) is dict and len(lexpos2) > 0:
+        p[0]['lexpos'] = [min(lexpos2a),max(lexpos2b)]
+
 def p_empty(p):
     'empty :'
     pass
@@ -33,7 +48,8 @@ def p_const(p):
         p[0] = { 'type' : 'const.%s' % p.slice[1].type, 'value' : p[1] }
     else:
         p[0] = p[1]
-
+    update_lexpos(p)
+    
 # Expresión: combinación de elementos que devuelven un valor computado.
 def p_expression(p):
     '''
@@ -48,6 +64,7 @@ def p_expression(p):
         if p[1]['type'] == p[0]['type']:
             del p[0]['valuelist'][0]
             p[0]['valuelist'] = p[1]['valuelist'] + p[0]['valuelist'] 
+    update_lexpos(p)
             
     
 
@@ -56,6 +73,7 @@ def p_expression_paren(p):
     expression : LPAREN expression RPAREN
     '''
     p[0] = { 'type': 'expression.paren', 'value' : p[2] }
+    update_lexpos(p)
         
 
 def p_expression_value(p):
@@ -69,6 +87,7 @@ def p_expression_value(p):
         p[0] = { 'type': 'expression.%s' %  p.slice[1].type, 'value' : p[1] }
     else:
         p[0] = p[1]
+    update_lexpos(p)
 
 
 # Referencia: Variable con nombre que se debe acceder para obtener el valor.
@@ -97,6 +116,7 @@ def p_reference(p):
         p[0] = { 'type' : 'reference.arrayelement', 'value' : p[3], 'parent' : parent}
     else:
         print >> sys.stderr, "PANIC: Unknown argument list %s" % repr(typelist)
+    update_lexpos(p)
     
 # Llamada: Ejecución de una función a la que apunta la referencia
 def p_call(p):
@@ -104,18 +124,21 @@ def p_call(p):
     call : reference argumentlist
     '''
     p[0] = { 'type' : 'call', 'method' : p[1] , 'args' : p[2]}
+    update_lexpos(p)
 
 def p_newinstance(p):
     '''
     newinstance : NEW reference argumentlist
     '''
     p[0] = { 'type' : 'newinstance', 'method' : p[2] , 'args' : p[3]}
+    update_lexpos(p)
 
 def p_newinstance_2(p):
     '''
     newinstance : NEW reference 
     '''
     p[0] = { 'type' : 'newinstance', 'method' : p[2] , 'args' : []}
+    update_lexpos(p)
     
 
 def p_argumentlist(p):
@@ -130,6 +153,7 @@ def p_argumentlist(p):
         p[0] = p[2]
     else:
         print >> sys.stderr, "PANIC: Unknown argument list %s" % repr(typelist)
+    update_lexpos(p)
     
     
 
@@ -145,6 +169,7 @@ def p_argumentset(p):
         p[0] = p[1] + [p[3]]
     else:
         print >> sys.stderr, "PANIC: Unknown argument set %s" % repr(typelist)
+    update_lexpos(p)
     
     
 
@@ -161,6 +186,7 @@ def p_instruction_expression(p):
     p[0] = { 'type': 'instruction.%s' %  p.slice[1].type, 'value' : p[1] }
     if subtype != 'call':
         p[0]['warning'] =  'Using non-call expression (%s) as instruction' % repr(subtype)
+    update_lexpos(p)
 
 def p_instruction_return(p):
     '''
@@ -168,6 +194,7 @@ def p_instruction_return(p):
     '''
     
     p[0] = { 'type': 'instruction.return', 'value' : p[2] }
+    update_lexpos(p)
     
 
 # (Instrucción) Asignación: guardar el resultado de un cómputo en una variable.
@@ -182,6 +209,7 @@ def p_instruction_assigment(p):
 
     '''
     p[0] = { 'type': 'instruction.assigment.%s' %  p.slice[2].type, 'dest' : p[1], 'value' : p[3] }
+    update_lexpos(p)
 
 def p_instruction_assigment_2(p):
     '''
@@ -189,6 +217,7 @@ def p_instruction_assigment_2(p):
                 | reference MINUSMINUS
     '''
     p[0] = { 'type': 'instruction.assigment.%s' %  p.slice[2].type, 'dest' : p[1] }
+    update_lexpos(p)
 
 def p_commentlines(p):
     '''
@@ -199,6 +228,7 @@ def p_commentlines(p):
         p[0] = p[1]
     else:
         p[0] = p[1]+p[2]
+    update_lexpos(p)
 
 
 def p_instruction_comment(p):
@@ -209,6 +239,7 @@ def p_instruction_comment(p):
                 
     '''
     p[0] = { 'type': 'instruction.comment', 'value' : ("".join(p[1:])).split("\n") }
+    update_lexpos(p)
 
 
 # (Instrucción) Error: Composición de instrucción errónea. Se omite.    
@@ -216,9 +247,9 @@ def p_instruction_error(p):
     '''
     instruction     : error SEMI
                     | error NEWLINE
-                    | error ID
-                    | error RBRACE
                     | error RPAREN
+                    | error RBRACKET
+                    | error RBRACE
     
     '''
     global last_error_lextoken
@@ -229,6 +260,7 @@ def p_instruction_error(p):
     print >> sys.stderr, error
 
     p[0] =  { 'type': 'instruction.%s' %  p.slice[1].type, 'value' : error }
+    update_lexpos(p)
 
 def p_instruction_semi(p):
     '''
@@ -237,6 +269,7 @@ def p_instruction_semi(p):
     
     p[1]['semi'] = True
     p[0] =  p[1]
+    update_lexpos(p)
 
 
 def p_instruction_newline(p):
@@ -245,6 +278,7 @@ def p_instruction_newline(p):
     '''
     p[1]['newline'] = True
     p[0] =  p[1]
+    update_lexpos(p)
 
 # (Instrucción) Bloque:
 def p_instruction_block(p):
@@ -253,6 +287,7 @@ def p_instruction_block(p):
     '''
     
     p[0] =  { 'type': 'instructionblock', 'value' : p[1] }
+    update_lexpos(p)
 
 # Set de instrucciones: Colección de una o más instrucciones a ejecutar en orden.
 # TODO: Optional SEMI
@@ -275,6 +310,7 @@ def p_instructionset(p):
         print >> sys.stderr, "PANIC: Unknown instruction set %s" % repr(typelist)
     
     p[0] = { 'type': 'instructionset', 'instructionlist' : instructionlist }
+    update_lexpos(p)
 
 
 # TODO: instruction blocks: { abc; abc; abc; }
@@ -283,12 +319,14 @@ def p_instructionblock(p):
     instructionblock : LBRACE instructionset RBRACE
     '''
     p[0] = p[2]
+    update_lexpos(p)
 
 def p_instructionblock_empty(p):
     '''
     instructionblock : LBRACE RBRACE
     '''
     p[0] = { 'type': 'instructionset', 'instructionlist' : [] }
+    update_lexpos(p)
 
 
 def p_vardefopttype(p):
@@ -296,24 +334,28 @@ def p_vardefopttype(p):
     vardefopttype   : empty
     '''
     p[0] = None
+    update_lexpos(p)
 
 def p_vardefoptdefval(p):
     '''
     vardefoptdefval : empty
     '''
     p[0] = None
+    update_lexpos(p)
     
 def p_vardefopttype2(p):
     '''
     vardefopttype   : COLON ID
     '''
     p[0] = p[2]
+    update_lexpos(p)
 
 def p_vardefoptdefval2(p):
     '''
     vardefoptdefval : EQUALS expression
     '''
     p[0] = p[2]
+    update_lexpos(p)
     
 def p_instruction_vardef(p):
     '''
@@ -321,6 +363,7 @@ def p_instruction_vardef(p):
                 | CONST vardef 
     '''
     p[0] = { 'type': 'instruction.%s' %  p.slice[2].type, 'value' : p[2] }
+    update_lexpos(p)
 
     
 def p_vardef(p):
@@ -328,6 +371,7 @@ def p_vardef(p):
     vardef  : ID vardefopttype vardefoptdefval
     '''
     p[0] = {'type' : 'vardef' , 'name': p[1], 'vartype' : p[2], 'value' : p[3]}
+    update_lexpos(p)
     
 
 def p_functionargset(p):
@@ -342,6 +386,7 @@ def p_functionargset(p):
         p[0] = p[1] + [p[3]]
     else:
         print >> sys.stderr, "PANIC: Unknown argument set %s" % repr(typelist)
+    update_lexpos(p)
 
 def p_functionarglist(p):
     '''
@@ -355,26 +400,40 @@ def p_functionarglist(p):
         p[0] = []
     else:
         print >> sys.stderr, "PANIC: Unknown argument set %s" % repr(typelist)
+    update_lexpos(p)
     
 
 # TODO: flow-control instructions: for, while, if, class, function, ..
 def p_instruction_function(p):
     '''
-    instruction    : FUNCTION ID functionarglist instruction
+    instruction : FUNCTION ID functionarglist instruction
+                | FUNCTION ID functionarglist COLON ID instruction
     '''
-    p[0] = { 'type' : 'instruction.function', 'name' : p[2], 'argumentlist' : p[3], 'source' : p[4] }
+    typelist = " ".join([ x.type for x in p.slice[1:] ])
+    rettype = None
+    source = None
+    if typelist == 'FUNCTION ID functionarglist COLON ID instruction':
+        rettype = p[5] 
+        source = p[6]
+    else:
+        source = p[4]
+    
+    p[0] = { 'type' : 'instruction.function', 'name' : p[2], 'argumentlist' : p[3], 'source' : source, 'rettype' : rettype }
+    update_lexpos(p)
 
 def p_classextends(p):
     '''
         classextends : EXTENDS ID
     '''
     p[0] = p[2]
+    update_lexpos(p)
     
 def p_classextends_empty(p):
     '''
         classextends : empty
     '''
     p[0] = None
+    update_lexpos(p)
     
 
 def p_instruction_class(p):
@@ -382,11 +441,12 @@ def p_instruction_class(p):
     instruction    : CLASS ID classextends instruction
     '''
     p[0] = { 'type' : 'instruction.class', 'name' : p[2], 'extends' : p[3], 'source' : p[4] }
+    update_lexpos(p)
 
 
 
 start = 'instructionset'
-debug = 0
+debug = 50
 
 
 

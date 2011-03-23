@@ -2,8 +2,10 @@
 from qsayacc import parser, configure_yaml
 import yaml,sys
 
-
-def generatecode(obj):
+source_data = ""
+def generatecode(obj,source):
+    global source_data
+    source_data = source
     objlist = gc(obj)
     indent = "    "
     txt = []
@@ -60,7 +62,40 @@ def gc(obj):
 
 def gc_instructionset(obj):
     source = []
+    lastok = None
+    lasterror = None
     for instruction in obj['instructionlist']:
+        if instruction['type'] == 'instruction.error':
+            if 'lexpos' in instruction:
+                lasterror = instruction['lexpos']
+        else:
+            if lasterror is not None:
+                try:
+                    lfrom = lastok[1]
+                except:
+                    lfrom = lasterror[0]
+                    
+                try:
+                    lto = instruction['lexpos'][0]
+                except:
+                    lto = lasterror[1]
+                    
+                global source_data
+                lineno1 = source_data.count("\n",0,lfrom) + 1
+                lineno2 = source_data.count("\n",0,lto)
+                code_start = source_data.rfind("\n",0,lfrom) + 1
+                code_end = source_data.find("\n",lto) 
+                
+                source.append("# see source: (%d-%d) " % (lineno1,lineno2)) 
+                for line in source_data[code_start:code_end].split("\n")[1:]:
+                    line = line.replace("\t","        ")
+                    source.append("# > %s" % line) 
+                
+                source.append("# ~~~ ") 
+                
+                lasterror = None
+            if 'lexpos' in instruction:
+                lastok = instruction['lexpos']
         val = gc(instruction)
         if type(val) is list: source += val
         else: source.append(val)
@@ -72,6 +107,15 @@ def gc_instructionset(obj):
     
 def gc_instruction_error(obj):
     return "# " + obj['value']
+    
+def gc_expression_paren(obj):
+    return "(%s)" % gc(obj['value'])
+
+def gc_expression(obj):
+    return "%s" % gc(obj['value'])
+
+def gc_const(obj):
+    return "%s" % gc(obj['value'])
     
 def gc_instruction_comment(obj):
     return [ "# %s " % x for x in obj['value'] ]
@@ -147,7 +191,7 @@ def gc_expression_math(obj):
         "PLUS" : "+",
         "TIMES" : "*",
         "MINUS" : "-",
-        "DIV" : "/",
+        "DIVIDE" : "/",
         "MOD" : "%",
     }
     operator = operator_tr[operatorname]
@@ -231,7 +275,7 @@ def debug_convert(s):
         print yaml.dump(result)
     #print
     #print "Output:"
-    code = generatecode(result)
+    code = generatecode(result,s)
     print
     print code
     print
