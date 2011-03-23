@@ -86,6 +86,13 @@ def p_expression_boolcompare(p):
     p[0] = { 'type': 'expression.boolcompare.%s' % p.slice[2].type, 'valuelist' : [p[1], p[3] ] }
     update_lexpos(p)
             
+def p_expression_unary(p):
+    '''
+    expression : LNOT expression
+    '''
+    p[0] = { 'type': 'expression.unary.%s' % p.slice[1].type, 'value' : p[2] }
+    update_lexpos(p)
+            
     
 
 def p_expression_paren(p):
@@ -439,6 +446,38 @@ def p_instruction_while(p):
     instruction : WHILE LPAREN expression RPAREN instruction
     '''
     p[0] = { 'type' : 'instruction.while', 'condition' : p[3], 'source' : p[5]}
+        
+    update_lexpos(p)
+
+def p_instruction_switch(p):
+    '''
+    instruction : SWITCH LPAREN expression RPAREN instruction
+    '''
+    p[0] = { 'type' : 'instruction.switch', 'condition' : p[3], 'source' : p[5]}
+        
+    update_lexpos(p)
+
+def p_instruction_case(p):
+    '''
+    instruction : CASE expression COLON
+    '''
+    p[0] = { 'type' : 'instruction.case', 'value' : p[2]}
+        
+    update_lexpos(p)
+
+def p_instruction_case_default(p):
+    '''
+    instruction : DEFAULT COLON
+    '''
+    p[0] = { 'type' : 'instruction.default', 'value' : None}
+        
+    update_lexpos(p)
+
+def p_instruction_break(p):
+    '''
+    instruction : BREAK
+    '''
+    p[0] = { 'type' : 'instruction.break', 'value' : None}
         
     update_lexpos(p)
 

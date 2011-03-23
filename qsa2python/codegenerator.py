@@ -1,6 +1,7 @@
 # encoding: UTF-8
 from qsayacc import parser, configure_yaml
-import yaml,sys
+import yaml,sys, pprint
+prettyprint = pprint.PrettyPrinter(depth=3,indent = 2)
 
 source_data = ""
 def generatecode(obj,source):
@@ -51,10 +52,10 @@ def gc(obj):
                     "\"\"\"",
                     "   FATAL: No function suitable found for type %s" % repr(obj['type']),
                     "   function list that we've looked for: %s" % " , ".join(lookedfor),
-                    "   YAML Interpretation:",
+                    "   PPrint Interpretation:",
                     "",
                 ]
-                ret += [ "        " + line for line in (yaml.dump(obj)).split("\n") ]
+                ret += [ "        " + line for line in (prettyprint.pformat(obj)).split("\n") ]
                 ret.append('"""')
                 return "\n".join(ret)
         
@@ -176,8 +177,41 @@ def gc_instruction_with(obj):
     global classname
     obj['finalcondition'] = gc(obj['condition'])
     ret = []
-    ret.append("with %(finalcondition)s:" % obj)
+    ret.append("with %(finalcondition)s: # ERROR / TODO: remove ''with'' because is not the same!" % obj)
     ret.append(getsource(obj['source']))
+    
+    return ret
+
+
+def gc_instruction_switch(obj):
+    global classname
+    obj['finalcondition'] = gc(obj['condition'])
+    ret = []
+    ret.append("switch %(finalcondition)s: # ERROR / TODO: remove 'switch' because there isn't one in python!" % obj)
+    ret.append(getsource(obj['source']))
+    
+    return ret
+
+def gc_instruction_case(obj):
+    global classname
+    obj['finalvalue'] = gc(obj['value'])
+    ret = []
+    ret.append("case %(finalvalue)s # ERROR / TODO: remove 'case' because there isn't one in python!" % obj)
+    
+    return ret
+
+
+def gc_instruction_default(obj):
+    global classname
+    ret = []
+    ret.append("default # ERROR / TODO: remove 'default' because there isn't one in python!" % obj)
+    
+    return ret
+
+def gc_instruction_break(obj):
+    global classname
+    ret = []
+    ret.append("break")
     
     return ret
 
@@ -262,6 +296,16 @@ def gc_expression_boolcompare(obj):
     #print operatorname, obj['valuelist']
     return (" %s " % operator).join([ str(gc(x)) for x in obj['valuelist'] ])
 
+def gc_expression_unary(obj):
+    objtype = str(obj['type']).split(".")
+    operatorname = objtype[-1]
+    operator_tr = { # traduccion de operadores matemáticos
+        'LNOT' : "not", 
+    }
+    operator = operator_tr[operatorname]
+    #print operatorname, obj['valuelist']
+    return "%s %s" % (operator,gc(obj['value']))
+
 def gc_instruction_assigment(obj):
     objtype = str(obj['type']).split(".")
     operatorname = objtype[-1]
@@ -341,9 +385,7 @@ def debug_convert(s):
     #print
     #print "Output:"
     code = generatecode(result,s)
-    print
     print code
-    print
     return code
     
 
