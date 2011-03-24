@@ -318,7 +318,7 @@ def p_instruction_assigment_3(p):
     setinstruction : PLUSPLUS reference
                 | MINUSMINUS reference
     '''
-    p[0] = { 'type': 'instruction.assigment.%s' %  p.slice[2].type, 'dest' : p[1], 'direction' : -1 }
+    p[0] = { 'type': 'instruction.assigment.%s' %  p.slice[1].type, 'dest' : p[2], 'direction' : -1 }
     update_lexpos(p)
 
 def p_expression_assigment_3(p):
@@ -326,7 +326,7 @@ def p_expression_assigment_3(p):
     expression : PLUSPLUS reference
                 | MINUSMINUS reference
     '''
-    p[0] = { 'type': 'instruction.assigment.%s' %  p.slice[2].type, 'dest' : p[1], 'direction' : -1  }
+    p[0] = { 'type': 'instruction.assigment.%s' %  p.slice[1].type, 'dest' : p[2], 'direction' : -1  }
     update_lexpos(p)
 
 def p_commentlines(p):

@@ -1,6 +1,8 @@
 # encoding: UTF-8
 from qsayacc import parser, configure_yaml
-import yaml,sys, pprint
+from qsalexer import lexer
+
+import yaml,sys, pprint, traceback
 prettyprint = pprint.PrettyPrinter(depth=3,indent = 2)
 
 source_data = ""
@@ -439,6 +441,7 @@ def main():
     if options.filename:
         for filename in args:
             if len(args) > 1:
+                lexer.lineno = 0
                 print >> sys.stderr, "--- FICHERO: %s" % filename
                 print "# ######################################################################################"
                 print "# ####################### FICHERO: %32s ####################" % filename
@@ -451,8 +454,7 @@ def main():
                 print "# ******* PANIC: Exception uncaught:", e
                 print
                 print >> sys.stderr, "PANIC: Exception uncaught:", e
-                if len(args) == 1:
-                    raise
+                print >> sys.stderr, traceback.format_exc()
         sys.exit(0)
 
     
