@@ -334,10 +334,10 @@ def p_instruction_error(p):
 
     context = p.lexer.lexdata[last_error_lextoken.lexpos:p.lexpos(2)+1].split()[0]
     charlastline1 = p.lexer.lexdata.rfind("\n",0,last_error_lextoken.lexpos)
-    lpos1 = last_error_lextoken.lexpos-charlastline1
+    lpos1 = len(p.lexer.lexdata[charlastline1+1:last_error_lextoken.lexpos+1].replace("\t","        "))
 
     charlastline2 = p.lexer.lexdata.rfind("\n",0,p.lexpos(2))
-    lpos2 = p.lexpos(2)-charlastline1
+    lpos2 = len(p.lexer.lexdata[charlastline2+1:p.lexpos(2)+1].replace("\t","        "))
     
     error = "FATAL: Syntax error in input, line %d:%d-%d:%d : %s" % (last_error_lextoken.lineno,lpos1,p[1].lineno, lpos2,repr(context))
 
@@ -441,8 +441,16 @@ def p_vardefoptdefval2(p):
     
 def p_instruction_vardef(p):
     '''
-    instruction : VAR vardef
-                | CONST vardef 
+    instruction : vardefinstruction
+    '''
+    p[0] = p[1]
+    update_lexpos(p)
+
+    
+def p_vardefinstruction(p):
+    '''
+    vardefinstruction : VAR vardef
+                      | CONST vardef 
     '''
     p[0] = { 'type': 'instruction.%s' %  p.slice[2].type, 'value' : p[2] }
     update_lexpos(p)
@@ -540,9 +548,12 @@ def p_optinstructioncomma(p):
     '''
     optinstructioncomma : empty
                         | instructioncomma
+                        | vardefinstruction
     '''
     typelist = " ".join([ x.type for x in p.slice[1:] ])
     if typelist == 'instructioncomma':
+        p[0] = p[1]
+    elif typelist == 'vardefinstruction':
         p[0] = p[1]
     elif typelist == 'empty':
         p[0] = None
@@ -553,7 +564,7 @@ def p_optinstructioncomma(p):
 
 def p_instruction_forclassic(p):
     '''
-    instruction : FOR LPAREN optinstructioncomma COLON optexpression COLON optinstructioncomma RPAREN instruction
+    instruction : FOR LPAREN optinstructioncomma SEMI optexpression SEMI optinstructioncomma RPAREN instruction
     '''
     p[0] = { 'type' : 'instruction.forclassic', 
         'initialization' : p[3], 
@@ -684,12 +695,12 @@ def configure_yaml():
     yaml_configured = True
 
 # Build the parser
-parser = yacc.yacc(debug=True)
-"""try:
+#parser = yacc.yacc(debug=True)
+try:
     parser = yacc.yacc(errorlog=yacc.NullLogger())
 except:
     parser = yacc.yacc()
-"""
+    
 def main():
     import sys
     from qsacalculate import calculate

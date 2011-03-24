@@ -438,7 +438,21 @@ def main():
 
     if options.filename:
         for filename in args:
-            debug_convert(open(filename).read())
+            if len(args) > 1:
+                print >> sys.stderr, "FICHERO: %s" % filename
+                print "# ##########################################################"
+                print "# ####################### FICHERO: %32s ####################" % filename
+                print "# ##########################################################"
+                print
+                
+            try:
+                debug_convert(open(filename).read())
+            except Exception, e:
+                print "# ******* PANIC: Exception uncaught:", e
+                print
+                print >> sys.stderr, "PANIC: Exception uncaught:", e
+                if len(args) == 1:
+                    raise
         sys.exit(0)
 
     
