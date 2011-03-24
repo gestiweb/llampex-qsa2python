@@ -109,7 +109,7 @@ function interna_init()
 		
 	if (cursor.modeAccess() == cursor.Insert) {
 		cursor.setValueBuffer("codejercicio", flfactppal.iface.pub_ejercicioActual());
-		this.child("fdbAsiento").setValue(numero = flcontppal.iface.siguienteNumero(cursor.valueBuffer("codejercicio"), "nasiento"));
+		this.child("fdbAsiento").setValue(flcontppal.iface.siguienteNumero(cursor.valueBuffer("codejercicio"), "nasiento"));
 
 		var miVar:FLVar = new FLVar();
 		var tipoPredefinido:String = miVar.get("TIPOPRE");

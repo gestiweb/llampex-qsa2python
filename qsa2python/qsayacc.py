@@ -2,12 +2,16 @@
 import ply.yacc as yacc
 from qsalexer import tokens
 import sys
+import pprint
+prettyprint = pprint.PrettyPrinter(depth=4,indent = 8)
+pformat = prettyprint.pformat
 
 global last_error_lextoken
+global last_ok_pos
 last_error_lextoken = None
+last_ok_pos = None
 precedence = (
     ('left', 'NEWLINE'),
-    ('left', 'LBRACE', 'RBRACE'),
     ('left', 'PLUS', 'MINUS'),
     ('left', 'TIMES', 'DIVIDE'),
     ('left', 'ICONST', 'SCONST', 'FCONST', 'CCONST', 'RXCONST', 'ID'),
@@ -16,10 +20,13 @@ precedence = (
     ('left', 'LPAREN', 'RPAREN'),
     ('left', 'LBRACKET', 'RBRACKET'),
     ('right', 'IF','ELSE'),
-    ('left', 'SEMI'), # -- importante para poder tener puntoycoma opcional!
+    ('left', 'LBRACE', 'RBRACE'),
+    ('left', 'SEMI', 'COMMENTBLOCKSTART', 'RAWDATA', 'COMMENTBLOCKEND'), # -- importante para poder tener puntoycoma opcional!
 )
 
+
 def update_lexpos(p):
+    global last_ok_pos
     lexpos1 = [ p.lexspan(i) for i in range(1,len(p)) ]
     lexpos2 = filter( lambda (x,y): x>0 and y>0, lexpos1)
     lexpos2a = [x for x,y in lexpos2 ]
@@ -32,6 +39,7 @@ def update_lexpos(p):
         
     if type(p[0]) is dict and len(lexpos2) > 0:
         p[0]['lexpos'] = [min(lexpos2a),max(lexpos2b)]
+        last_ok_pos = max(p[0]['lexpos'] + [last_ok_pos])
 
 def p_empty(p):
     'empty :'
@@ -86,7 +94,7 @@ def p_list(p):
         p[0]['valuelist'] = p[2]
 
     update_lexpos(p)
-    
+
 # Expresión: combinación de elementos que devuelven un valor computado.
 def p_expression_math(p):
     '''
@@ -294,7 +302,31 @@ def p_instruction_assigment_2(p):
     setinstruction : reference PLUSPLUS
                 | reference MINUSMINUS
     '''
-    p[0] = { 'type': 'instruction.assigment.%s' %  p.slice[2].type, 'dest' : p[1] }
+    p[0] = { 'type': 'instruction.assigment.%s' %  p.slice[2].type, 'dest' : p[1], 'direction' : 1  }
+    update_lexpos(p)
+
+def p_expression_assigment_2(p):
+    '''
+    expression : reference PLUSPLUS
+                | reference MINUSMINUS
+    '''
+    p[0] = { 'type': 'instruction.assigment.%s' %  p.slice[2].type, 'dest' : p[1], 'direction' : 1  }
+    update_lexpos(p)
+
+def p_instruction_assigment_3(p):
+    '''
+    setinstruction : PLUSPLUS reference
+                | MINUSMINUS reference
+    '''
+    p[0] = { 'type': 'instruction.assigment.%s' %  p.slice[2].type, 'dest' : p[1], 'direction' : -1 }
+    update_lexpos(p)
+
+def p_expression_assigment_3(p):
+    '''
+    expression : PLUSPLUS reference
+                | MINUSMINUS reference
+    '''
+    p[0] = { 'type': 'instruction.assigment.%s' %  p.slice[2].type, 'dest' : p[1], 'direction' : -1  }
     update_lexpos(p)
 
 def p_commentlines(p):
@@ -325,20 +357,28 @@ def p_instruction_error(p):
     '''
     instruction     : error SEMI
                     | error NEWLINE
-                    | error RPAREN
-                    | error RBRACKET
-                    | error RBRACE
     
     '''
     global last_error_lextoken
 
-    context = p.lexer.lexdata[last_error_lextoken.lexpos:p.lexpos(2)+1].split()[0]
+    charlastline3 = p.lexer.lexdata.find("\n",last_error_lextoken.lexpos+1)
+    
     charlastline1 = p.lexer.lexdata.rfind("\n",0,last_error_lextoken.lexpos)
     lpos1 = len(p.lexer.lexdata[charlastline1+1:last_error_lextoken.lexpos+1].replace("\t","        "))
 
     charlastline2 = p.lexer.lexdata.rfind("\n",0,p.lexpos(2))
     lpos2 = len(p.lexer.lexdata[charlastline2+1:p.lexpos(2)+1].replace("\t","        "))
     
+    context1 = p.lexer.lexdata[charlastline1+1:last_error_lextoken.lexpos].strip() 
+    context23 = p.lexer.lexdata[last_error_lextoken.lexpos:charlastline3].strip()
+    try: 
+        lentok = len(p[1].value)
+    except:
+        lentok = 1
+    context2 = context23[:lentok]
+    context3 = context23[lentok:]
+    
+    context = "%s`%s`%s" % (context1,context2,context3)
     error = "FATAL: Syntax error in input, line %d:%d-%d:%d : %s" % (last_error_lextoken.lineno,lpos1,p[1].lineno, lpos2,repr(context))
 
     print >> sys.stderr, error
@@ -667,12 +707,28 @@ debug = 50
 # Error rule for syntax errors
 def p_error(p):
     global last_error_lextoken
+    global last_ok_pos
     last_error_lextoken = p
     if p:
         error = "FATAL: Syntax error in input, line %d, character %s!" % (p.lineno,repr(p.value))
     else:
         error = "PANIC: no data in parser!?"        
-        print >> sys.stderr, "**" , error
+        print >> sys.stderr, "** (%d)" % last_ok_pos , error
+        #print >> sys.stderr, "**", yacc.format_stack_entry()
+        global parser
+        from codegenerator import generatecode
+        for x in parser.symstack:
+            print >> sys.stderr, " - %15s : %s" % (str(x.__class__.__name__), str(x)) 
+            if hasattr(x,"value") and 'type' in x.value:
+                for n,line in list(enumerate(generatecode(x.value, "").split("\n")))[-15:]:
+                    print >> sys.stderr, "%d>>>" % n, line
+            
+        print >> sys.stderr, "Last State:", " ".join([str(x) for x in parser.statestack])
+        #print >> sys.stderr, "Last Stack:", pformat(parser.symstack[1].value)
+        print >> sys.stderr, yacc.format_stack_entry(parser.statestack)
+        #for k in dir(yacc):
+        #    print >> sys.stderr, k, "->",repr(getattr(yacc,k))
+            
         
     return error 
 
@@ -695,12 +751,13 @@ def configure_yaml():
     yaml_configured = True
 
 # Build the parser
-#parser = yacc.yacc(debug=True)
-try:
+parser = yacc.yacc(debug=True)
+
+"""try:
     parser = yacc.yacc(errorlog=yacc.NullLogger())
 except:
     parser = yacc.yacc()
-    
+   """ 
 def main():
     import sys
     from qsacalculate import calculate

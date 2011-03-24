@@ -176,7 +176,7 @@ def t_COMMENTBLOCKSTART(t):
     return t
     
 def t_COMMENT_COMMENTBLOCKEND(t):
-    r'(.+)\*/'
+    r'(.*)\*/'
     t.lexer.pop_state()
     return t
 
