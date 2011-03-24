@@ -6,8 +6,17 @@ import sys
 global last_error_lextoken
 last_error_lextoken = None
 precedence = (
+    ('left', 'NEWLINE'),
+    ('left', 'LBRACE', 'RBRACE'),
     ('left', 'PLUS', 'MINUS'),
     ('left', 'TIMES', 'DIVIDE'),
+    ('left', 'ICONST', 'SCONST', 'FCONST', 'CCONST', 'RXCONST', 'ID'),
+    ('left', 'LT', 'GT', 'LE', 'GE', 'EQ', 'NE'),
+    ('left', 'LNOT', 'LAND', 'LOR'),
+    ('left', 'LPAREN', 'RPAREN'),
+    ('left', 'LBRACKET', 'RBRACKET'),
+    ('right', 'IF','ELSE'),
+    ('left', 'SEMI'), # -- importante para poder tener puntoycoma opcional!
 )
 
 def update_lexpos(p):
@@ -50,8 +59,36 @@ def p_const(p):
         p[0] = p[1]
     update_lexpos(p)
     
+def p_listvalues(p):
+    '''
+    listvalues  : expression
+                | listvalues COMMA expression
+    '''
+    typelist = " ".join([ x.type for x in p.slice[1:] ])
+    if typelist == 'expression': 
+        p[0] = [p[1]]
+    elif typelist == 'listvalues COMMA expression': 
+        p[0] = p[1] + [p[3]]
+    else:
+        print >> sys.stderr, "PANIC: Unknown argument list %s" % repr(typelist)
+        
+    
+def p_list(p):
+    '''
+    list : LBRACKET RBRACKET
+         | LBRACKET listvalues RBRACKET
+    '''
+    
+    p[0] = { 'type': 'list', 'valuelist' : [] }
+    
+    typelist = " ".join([ x.type for x in p.slice[1:] ])
+    if typelist == 'LBRACKET listvalues RBRACKET': 
+        p[0]['valuelist'] = p[2]
+
+    update_lexpos(p)
+    
 # Expresión: combinación de elementos que devuelven un valor computado.
-def p_expression(p):
+def p_expression_math(p):
     '''
     expression : expression PLUS expression
                | expression MINUS expression
@@ -77,7 +114,7 @@ def p_expression_compare(p):
     '''
     p[0] = { 'type': 'expression.compare.%s' % p.slice[2].type, 'valuelist' : [p[1], p[3] ] }
     update_lexpos(p)
-            
+                        
 def p_expression_boolcompare(p):
     '''
     expression : expression LOR expression
@@ -103,12 +140,14 @@ def p_expression_paren(p):
     update_lexpos(p)
         
 
+
 def p_expression_value(p):
     '''
     expression : const
                | reference
                | call
                | newinstance
+               | list
     '''
     if debug > 5:
         p[0] = { 'type': 'expression.%s' %  p.slice[1].type, 'value' : p[1] }
@@ -215,19 +254,31 @@ def p_instruction_expression(p):
         p[0]['warning'] =  'Using non-call expression (%s) as instruction' % repr(subtype)
     update_lexpos(p)
 
+
+def p_instruction_setinstruction(p):
+    '''
+    instruction : setinstruction 
+    '''
+    p[0] = p[1]
+    update_lexpos(p)
+
 def p_instruction_return(p):
     '''
     instruction : RETURN expression 
+                | RETURN
     '''
     
-    p[0] = { 'type': 'instruction.return', 'value' : p[2] }
+    p[0] = { 'type': 'instruction.return', 'value' : None }
+    if len(p) > 2:
+        p[0]['value'] = p[2]    
+        
     update_lexpos(p)
     
 
 # (Instrucción) Asignación: guardar el resultado de un cómputo en una variable.
-def p_instruction_assigment(p):
+def p_setinstruction_assigment(p):
     '''
-    instruction : reference EQUALS expression
+    setinstruction : reference EQUALS expression
                 | reference TIMESEQUAL expression
                 | reference DIVEQUAL expression
                 | reference MODEQUAL expression
@@ -240,7 +291,7 @@ def p_instruction_assigment(p):
 
 def p_instruction_assigment_2(p):
     '''
-    instruction : reference PLUSPLUS
+    setinstruction : reference PLUSPLUS
                 | reference MINUSMINUS
     '''
     p[0] = { 'type': 'instruction.assigment.%s' %  p.slice[2].type, 'dest' : p[1] }
@@ -282,7 +333,13 @@ def p_instruction_error(p):
     global last_error_lextoken
 
     context = p.lexer.lexdata[last_error_lextoken.lexpos:p.lexpos(2)+1].split()[0]
-    error = "FATAL: Syntax error in input, line %d-%d, at %d-%d! %s" % (last_error_lextoken.lineno,p[1].lineno, last_error_lextoken.lexpos, p.lexpos(2),repr(context))
+    charlastline1 = p.lexer.lexdata.rfind("\n",0,last_error_lextoken.lexpos)
+    lpos1 = last_error_lextoken.lexpos-charlastline1
+
+    charlastline2 = p.lexer.lexdata.rfind("\n",0,p.lexpos(2))
+    lpos2 = p.lexpos(2)-charlastline1
+    
+    error = "FATAL: Syntax error in input, line %d:%d-%d:%d : %s" % (last_error_lextoken.lineno,lpos1,p[1].lineno, lpos2,repr(context))
 
     print >> sys.stderr, error
 
@@ -449,6 +506,64 @@ def p_instruction_while(p):
         
     update_lexpos(p)
 
+def p_optexpression(p):
+    '''
+    optexpression   : empty
+                    | expression
+    '''
+    typelist = " ".join([ x.type for x in p.slice[1:] ])
+    if typelist == 'expression':
+        p[0] = p[1]
+    elif typelist == 'empty':
+        p[0] = None
+    else:
+        print >> sys.stderr, "PANIC: Unknown argument list %s" % repr(typelist)
+    update_lexpos(p)
+    
+def p_instructioncomma(p):
+    '''
+    instructioncomma    : setinstruction
+                        | instructioncomma COMMA setinstruction
+    '''
+    typelist = " ".join([ x.type for x in p.slice[1:] ])
+    if typelist == 'setinstruction':
+        p[0] = [p[1]]
+    elif typelist == 'instructioncomma COMMA setinstruction':
+        p[0] = p[1] + [p[3]]
+    else:
+        print >> sys.stderr, "PANIC: Unknown argument list %s" % repr(typelist)
+    
+    update_lexpos(p)
+
+    
+def p_optinstructioncomma(p):
+    '''
+    optinstructioncomma : empty
+                        | instructioncomma
+    '''
+    typelist = " ".join([ x.type for x in p.slice[1:] ])
+    if typelist == 'instructioncomma':
+        p[0] = p[1]
+    elif typelist == 'empty':
+        p[0] = None
+    else:
+        print >> sys.stderr, "PANIC: Unknown argument list %s" % repr(typelist)
+    update_lexpos(p)
+
+
+def p_instruction_forclassic(p):
+    '''
+    instruction : FOR LPAREN optinstructioncomma COLON optexpression COLON optinstructioncomma RPAREN instruction
+    '''
+    p[0] = { 'type' : 'instruction.forclassic', 
+        'initialization' : p[3], 
+        'condition' : p[5], 
+        'increment' : p[7], 
+        'source' : p[9]}
+    
+    update_lexpos(p)
+
+
 def p_instruction_switch(p):
     '''
     instruction : SWITCH LPAREN expression RPAREN instruction
@@ -569,11 +684,12 @@ def configure_yaml():
     yaml_configured = True
 
 # Build the parser
-try:
+parser = yacc.yacc(debug=True)
+"""try:
     parser = yacc.yacc(errorlog=yacc.NullLogger())
 except:
     parser = yacc.yacc()
-
+"""
 def main():
     import sys
     from qsacalculate import calculate

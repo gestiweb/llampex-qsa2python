@@ -23,11 +23,20 @@ def flattencode(objlist, depth = 0):
     for obj in objlist:
         if type(obj) is list:
             newlines = flattencode(obj, depth+1)
+            if depth > 0:
+                lvidx = len(flatval)-1
+                newline = True
+                if flatval[lvidx][1].startswith("else"): newline = False
+                if flatval[lvidx][1].startswith("#"): newline = False
+                if flatval[lvidx-1][1].startswith("#"): newline = False
+                
+                if newline:
+                    flatval.insert(len(flatval)-1, (depth, "") )
             flatval += newlines
             if depth == 0:
                 flatval.append( (depth, "") )
-            if len(newlines)>10:
-                flatval.append( (depth, "") )
+            #if len(newlines)>10:
+            #    flatval.append( (depth, "") )
         else:
             flatval.append( (depth, obj) )
     return flatval
@@ -272,6 +281,9 @@ def gc_expression_math(obj):
     operator = operator_tr[operatorname]
     #print operatorname, obj['valuelist']
     return (" %s " % operator).join([ str(gc(x)) for x in obj['valuelist'] ])
+
+def gc_list(obj):
+    return "[%s]" % ", ".join([ str(gc(x)) for x in obj['valuelist'] ])
 
 def gc_expression_compare(obj):
     objtype = str(obj['type']).split(".")
