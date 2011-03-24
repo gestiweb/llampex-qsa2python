@@ -11,7 +11,6 @@ global last_ok_pos
 last_error_lextoken = None
 last_ok_pos = None
 precedence = (
-    ('left', 'NEWLINE'),
     ('left', 'PLUS', 'MINUS'),
     ('left', 'TIMES', 'DIVIDE'),
     ('left', 'ICONST', 'SCONST', 'FCONST', 'CCONST', 'RXCONST', 'ID'),
@@ -21,6 +20,7 @@ precedence = (
     ('left', 'LBRACKET', 'RBRACKET'),
     ('right', 'IF','ELSE'),
     ('left', 'LBRACE', 'RBRACE'),
+    ('left', 'NEWLINE'),
     ('left', 'SEMI', 'COMMENTBLOCKSTART', 'RAWDATA', 'COMMENTBLOCKEND'), # -- importante para poder tener puntoycoma opcional!
 )
 
@@ -414,6 +414,15 @@ def p_instruction_block(p):
     update_lexpos(p)
 
 # Set de instrucciones: Colección de una o más instrucciones a ejecutar en orden.
+def p_instructionset_empty(p):
+    '''
+    instructionset : SEMI
+                   | NEWLINE
+    '''
+    p[0] = { 'type': 'instructionset', 'instructionlist' : [] }
+    update_lexpos(p)
+
+
 def p_instructionset(p):
     '''
     instructionset : instruction
@@ -711,17 +720,21 @@ def p_error(p):
     last_error_lextoken = p
     if p:
         error = "FATAL: Syntax error in input, line %d, character %s!" % (p.lineno,repr(p.value))
+        print >> sys.stderr, error
+        debug = False
     else:
+        debug = True
         error = "PANIC: no data in parser!?"        
         print >> sys.stderr, "** (%d)" % last_ok_pos , error
         #print >> sys.stderr, "**", yacc.format_stack_entry()
+    if debug:
         global parser
         from codegenerator import generatecode
         for x in parser.symstack:
             print >> sys.stderr, " - %15s : %s" % (str(x.__class__.__name__), str(x)) 
-            if hasattr(x,"value") and 'type' in x.value:
-                for n,line in list(enumerate(generatecode(x.value, "").split("\n")))[-15:]:
-                    print >> sys.stderr, "%d>>>" % n, line
+            #if hasattr(x,"value") and 'type' in x.value:
+            #    for n,line in list(enumerate(generatecode(x.value, "").split("\n")))[-15:]:
+            #        print >> sys.stderr, "%d>>>" % n, line
             
         print >> sys.stderr, "Last State:", " ".join([str(x) for x in parser.statestack])
         #print >> sys.stderr, "Last Stack:", pformat(parser.symstack[1].value)
