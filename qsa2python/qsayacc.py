@@ -11,6 +11,7 @@ global last_ok_pos
 last_error_lextoken = None
 last_ok_pos = None
 precedence = (
+    #('left', 'LLOW'),    
     ('left', 'PLUS', 'MINUS'),
     ('left', 'TIMES', 'DIVIDE'),
     ('left', 'ICONST', 'SCONST', 'FCONST', 'CCONST', 'RXCONST', 'ID'),
@@ -22,6 +23,8 @@ precedence = (
     ('left', 'LBRACE', 'RBRACE'),
     ('left', 'NEWLINE'),
     ('left', 'SEMI', 'COMMENTBLOCKSTART', 'RAWDATA', 'COMMENTBLOCKEND'), # -- importante para poder tener puntoycoma opcional!
+    #('right', 'RHIGH'),    
+    ('left', 'LHIGH'),    
 )
 
 
@@ -339,16 +342,56 @@ def p_commentlines(p):
     else:
         p[0] = p[1]+p[2]
     update_lexpos(p)
-
-
-def p_instruction_comment(p):
+    
+"""def p_instruction_comment(p):
     '''
-    instruction : COMMENTBLOCKSTART COMMENTBLOCKEND
+    instruction : comment %prec LLOW
+    '''
+    p[0] = p[1]
+"""
+
+def p_instruction_comment1(p):
+    '''
+    instruction : commentlist instruction %prec LHIGH
+    '''
+    p[0] = p[2]
+    p[0]['commentlist'] = p[1]
+    
+def p_instruction_comment2(p):
+    '''
+    instruction : instruction commentlist 
+    '''
+    p[0] = p[1]
+    p[0]['commentlist'] = p[2]
+    
+def p_commentlist_1(p):
+    '''
+    commentlist : comment
+    '''
+    p[0] = [p[1]]
+    
+def p_commentlist_2(p):
+    '''
+    commentlist : commentlist comment
+    '''
+    p[0] = p[1] + [p[2]]
+
+def p_comment(p):
+    '''
+    comment : COMMENTBLOCKSTART COMMENTBLOCKEND
                 | COMMENTBLOCKSTART commentlines COMMENTBLOCKEND
                 | COMMENTLINE
                 
     '''
     p[0] = { 'type': 'instruction.comment', 'value' : ("".join(p[1:])).split("\n") }
+    update_lexpos(p)
+
+def p_comment_newline(p):
+    '''
+    comment : comment NEWLINE
+    '''
+    p[1]['newline'] = True
+    p[0] =  p[1]
     update_lexpos(p)
 
 
@@ -404,13 +447,22 @@ def p_instruction_newline(p):
     p[0] =  p[1]
     update_lexpos(p)
 
+def p_commentlist(p):
+    '''
+    optcommentlist : commentlist
+                   | empty
+    '''
+    p[0] = p[1]
+    if p[0] is None: p[0] = []
+    
 # (Instrucción) Bloque:
 def p_instruction_block(p):
     '''
-    instruction : instructionblock
+    instruction : optcommentlist instructionblock optcommentlist
+                
     '''
     
-    p[0] =  { 'type': 'instructionblock', 'value' : p[1] }
+    p[0] =  { 'type': 'instructionblock', 'value' : p[2], 'precomments' : p[1],'postcomments':p[3]  }
     update_lexpos(p)
 
 # Set de instrucciones: Colección de una o más instrucciones a ejecutar en orden.
